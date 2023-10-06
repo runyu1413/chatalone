@@ -53,7 +53,9 @@ class _Chat extends State<Chat>{
       //myController.text=base;
     });
  }
+ void decodeImageBase65() async{
 
+ }
   @override
   void initState() {
     super.initState();
@@ -132,7 +134,9 @@ class _Chat extends State<Chat>{
                       color: (messages[index].messageType  == "receiver"?Colors.grey.shade200:Colors.green[200]),
                     ),
                     padding: EdgeInsets.all(16),
-                    child: Text(messages[index].messageContent, style: TextStyle(fontSize: 15),),
+                    child:
+                    (messages[index].messageFormat =="message"?Text(messages[index].messageContent, style: TextStyle(fontSize: 15),): Image.memory( base64Decode(messages[index].messageContent)))
+                    ,
                   ),
                 ),
               );
