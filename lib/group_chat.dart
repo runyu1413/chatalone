@@ -7,22 +7,23 @@ import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
-import 'package:ntu_fyp_chatalone/createuser.dart';
 import 'package:profanity_filter/profanity_filter.dart';
 import 'package:image_picker/image_picker.dart';
 
-class Chat extends StatefulWidget{
-  Device connected_device;
+class GroupChat extends StatefulWidget{
+  List<Device> connected_device;
   NearbyService nearbyService;
+  String myName;
   var chat_state;
-  Chat({ required this.connected_device, required this.nearbyService});
+  String groupName;
+  GroupChat({ required this.myName,required this.connected_device, required this.nearbyService,required this.groupName});
 
 
   @override
-  State<StatefulWidget> createState()  => _Chat();
+  State<StatefulWidget> createState()  => _GroupChat();
 
 }
-class _Chat extends State<Chat>{
+class _GroupChat extends State<GroupChat>{
   late StreamSubscription subscription;
   late StreamSubscription receivedDataSubscription;
   final filter = ProfanityFilter();
@@ -37,22 +38,28 @@ class _Chat extends State<Chat>{
       messages.insert(0, obj);
     });
   }
-
   void encodeImageBase64() async{
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if(image == null) return;
     Uint8List imagebyte = await image.readAsBytes();
     String base = base64Encode(imagebyte);
     final imagepath = File(image.path);
-    this.widget.nearbyService.sendMessage(this.widget.connected_device.deviceId,"image|" +base);
-    var obj = ChatMessage(messageContent: base, messageType: "sender", messageFormat:"image");
-    addMessgeToList(obj);
+    for(Device device in this.widget.connected_device) {
+      this.widget.nearbyService.sendMessage(
+          device.deviceId, "image|"+base);
+      var obj = ChatMessage(
+          from: this.widget.myName,
+          messageContent: base,
+          messageType: "sender",
+          messageFormat: "image");
+      addMessgeToList(obj);
+    }
     setState(() {
       imageFile = imagepath;
       imagebase64 = base;
+      //myController.text=base;
     });
- }
-
+  }
   @override
   void initState() {
     super.initState();
@@ -67,12 +74,13 @@ class _Chat extends State<Chat>{
     receivedDataSubscription =
         this.widget.nearbyService.dataReceivedSubscription(callback: (data) {
           final splited = data["message"].split('|');
-          var obj = ChatMessage(messageContent: splited[1], messageType: "receiver",messageFormat:splited[0]);
-          addMessgeToList(obj);
+          for (Device device in this.widget.connected_device){
+            var obj = ChatMessage(from:device.deviceName,messageContent: splited[1], messageType: "receiver", messageFormat: splited[0]);
+            addMessgeToList(obj);
+          }
         });
-
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -84,9 +92,7 @@ class _Chat extends State<Chat>{
         flexibleSpace: SafeArea(
           child: Container(
             padding: EdgeInsets.only(right: 16),
-
             child: Row(
-
               children: <Widget>[
                 IconButton(
                   onPressed: (){
@@ -103,9 +109,7 @@ class _Chat extends State<Chat>{
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
                       SizedBox(height: 6,),
-                      Text(this.widget.connected_device.deviceName,style: TextStyle( fontSize: 16 ,fontWeight: FontWeight.w500,fontFamily:'RobotoMono' , color: Colors.white),),
-                      SizedBox(height: 3,),
-                      Text("connected",style: TextStyle(color: Colors.green, fontSize: 12, fontFamily: 'RobotoMono'),),
+                      Text(this.widget.groupName+" Chat",style: TextStyle( fontSize: 16 ,fontWeight: FontWeight.w500,fontFamily:'RobotoMono' , color: Colors.white),),
                     ],
                   ),
                 ),
@@ -117,25 +121,26 @@ class _Chat extends State<Chat>{
       body: Stack(
         children: <Widget>[
           ListView.builder(
-            shrinkWrap: true,
             itemCount: messages.length,
+            shrinkWrap: true,
             padding: EdgeInsets.only(top: 10,bottom: 10),
             itemBuilder: (context, index){
               return Container(
-                alignment: Alignment.bottomCenter,
                 padding: EdgeInsets.only(left: 10,right: 14,top: 10,bottom: 10),
                 child: Align(
-                  alignment: (messages[index].messageType == "receiver"?Alignment.bottomLeft:Alignment.bottomRight),
+                  alignment: (messages[index].messageType == "receiver"?Alignment.topLeft:Alignment.topRight),
                   child: Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
                       color: (messages[index].messageType  == "receiver"?Colors.grey.shade200:Colors.green[200]),
                     ),
                     padding: EdgeInsets.all(16),
-                    child:
-                    (messages[index].messageFormat =="image"?Image.memory( base64Decode(messages[index].messageContent)):
-                    Text(messages[index].messageContent, style: TextStyle(fontSize: 15),))
-                    ,
+                    child:(messages[index].messageFormat  == "image"?
+                    Card(child: ListTile(title: Text(messages[index].from, style: TextStyle(fontSize: 15),), subtitle:Image.memory(base64Decode(messages[index].messageContent))
+                      ,),)
+                        :Card(child: ListTile(title: Text(messages[index].from, style: TextStyle(fontSize: 15),), subtitle:Text(messages[index].messageContent, style: TextStyle(fontSize: 15),)
+                      ,),)
+                    ),
                   ),
                 ),
               );
@@ -156,14 +161,14 @@ class _Chat extends State<Chat>{
                     child: TextFormField(
                       validator: (value){
                         if (value == null|| value.isEmpty){
-                          return "Plase enter a message";
+                          return 'Please enter a message';
                         }else if (filter.hasProfanity(value)){
                           return 'User contain profanity';
-                          }
-                          return null;
+                        }
+                        return null;
                       },
                       style: TextStyle(color: Colors.white, fontFamily: 'RobotoMono'),
-                      textDirection: TextDirection.ltr,
+                      textDirection: TextDirection.rtl,
                       decoration: InputDecoration(
                         hintText: "Enter your message...",
                         hintStyle: TextStyle(color: Colors.white, fontFamily: 'RobotoMono'),
@@ -173,38 +178,27 @@ class _Chat extends State<Chat>{
                       controller: myController,
                     ),
                   ),
-                 SizedBox(width: 15,)
-                 ,IconButton(onPressed: (){
-                  encodeImageBase64();
-                  }, icon: Icon(Icons.file_upload,color: Colors.white,size: 18,),),
+                  SizedBox(width: 15,)
+                  ,IconButton(onPressed: (){encodeImageBase64();}, icon: Icon(Icons.file_upload,color: Colors.white,size: 18,),),
                   FloatingActionButton(
                     onPressed: (){
-                              if (txtController.text == null || txtController.text.isEmpty)
-                              {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                         const SnackBar(content: Text("Please enter a username"))
-                              );        
-                              }
-                              else if (filter.hasProfanity(txtController.text))
-                              {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("Please do not enter profanity"))
-                                );
-                              }
-                              else{
-                                this.widget.nearbyService.sendMessage(
-                                this.widget.connected_device.deviceId,"message|" +myController.text);
-                                var obj = ChatMessage(messageContent: myController.text, messageType: "sender",
-                                messageFormat: "message");
-                                addMessgeToList(obj);
-                                myController.text = "";
-                              }
+                      for(Device device in this.widget.connected_device){
+                        this.widget.nearbyService.sendMessage(
+                            device.deviceId, "message|"+myController.text);
+                          var obj = ChatMessage(from: this.widget.myName,
+                              messageContent: myController.text,
+                              messageType: "sender",
+                              messageFormat: "message");
+                          addMessgeToList(obj);
+                        myController.text = "";
+                      }
                     },
                     child: Icon(Icons.play_circle_outline_rounded,color: Colors.white,size: 18,textDirection: TextDirection.ltr,),
                     backgroundColor: Colors.green[600],
                     elevation: 0,
                   ),
                 ],
+
               ),
             ),
           ),
@@ -213,12 +207,13 @@ class _Chat extends State<Chat>{
     );
   }
 
+
 }
 
-
 class ChatMessage{
+  String from;
   String messageContent;
   String messageType;
   String messageFormat;
-  ChatMessage({ required this.messageContent,  required this.messageType, required this.messageFormat});
+  ChatMessage({ required this.from, required this.messageContent,  required this.messageType, required this.messageFormat});
 }

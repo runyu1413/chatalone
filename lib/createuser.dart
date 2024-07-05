@@ -12,7 +12,7 @@ class CreateUser extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: false,backgroundColor: Colors.black,
         appBar: AppBar(
           backgroundColor: Color.fromARGB(255, 17, 20, 17),
           foregroundColor: Colors.white,
@@ -36,7 +36,7 @@ class CreateUser extends StatelessWidget {
           validator:(value){
             if (value == null|| value.isEmpty){
               return 'Please enter a username';
-            }else if (filter.hasProfanity(value)){
+            }else if (filter.hasProfanity(value)== true){
               return 'User contain profanity';
             }
              return null;
@@ -58,9 +58,27 @@ class UserButton extends StatefulWidget{
 }
 class UserButtonState extends State<UserButton>{
   @override
+    final filter = ProfanityFilter();
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.of(context).pushReplacementNamed('home',arguments: txtController.text), 
+      onTap: (){
+        if (txtController.text == null || txtController.text.isEmpty)
+        {
+         ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Please enter a username"))
+          );        
+        }
+        else if (filter.hasProfanity(txtController.text))
+        {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Please do not enter profanity"))
+          );
+        }
+        else{
+          Navigator.of(context).pushReplacementNamed('home',arguments: txtController.text);
+        }
+      } 
+      , 
           child: Container(padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(color:Color.fromARGB(255, 95, 150, 96)),child: const Text('Confirm'),), 
     );

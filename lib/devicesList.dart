@@ -53,11 +53,19 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
               Text("Finding nearby devices",style: TextStyle(fontFamily: 'RobotoMono'),),
             ],
           ),
-        ),bottomNavigationBar: Container(height: 60, color: Colors.grey,child: InkWell(onTap: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) => MeshChat(myName: this.widget.mydata, connected_device: connectedDevices,nearbyService: nearbyService,)),
-                                  ), child: Padding(padding: EdgeInsets.only(top: 7.5), child: Column(children: <Widget>[Icon(Icons.chat_bubble, color: Colors.white,), Text('Mesh Chat',style:  TextStyle(fontFamily: 'RobotoMono', color: Colors.white),)],),),),),
+        ),bottomNavigationBar: Container(
+            height: 60,
+            color: Colors.grey,
+            child: InkWell(
+              onTap: () => Navigator.push(
+                context, MaterialPageRoute(
+                  builder: (context) => MeshChat(
+                    myName: this.widget.mydata,
+                    connected_device: connectedDevices,
+                    nearbyService: nearbyService,)
+                  ),
+              ),
+              child: Padding(padding: EdgeInsets.only(top: 7.5), child: Column(children: <Widget>[Icon(Icons.chat_bubble, color: Colors.white,), Text('Mesh Chat',style:  TextStyle(fontFamily: 'RobotoMono', color: Colors.white),)],),),),),
         backgroundColor: Colors.black,
         body: ListView.builder(
             itemCount: devices.length,
