@@ -1,0 +1,20 @@
+{
+  "@@locale": "ms",
+  "appTitle": "Chatalone",
+  "welcomeText": "Selamat datang, ",
+  "profileNameChange": "Tukar Nama Profil",
+  "enterNewName": "Masukkan Nama Baru",
+  "cancel": "Batal",
+  "confirm": "Sahkan",
+  "findNearbyDevice": "Cari Peranti Berdekatan",
+  "groupChat": "Sembang Kumpulan",
+  "settings": "Tetapan",
+  "@welcomeText": {
+    "description": "Mesej selamat datang untuk pengguna"
+  },
+  "@settings": {
+    "description": "Judul untuk halaman tetapan"
+  }
+}
+
+  

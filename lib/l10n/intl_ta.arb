@@ -1,0 +1,20 @@
+{
+  "@@locale": "ta",
+  "appTitle": "Chatalone",
+  "welcomeText": "வரவேற்கிறோம், ",
+  "profileNameChange": "சுயவிவர பெயர் மாற்றம்",
+  "enterNewName": "புதிய பெயரை உள்ளிடுக",
+  "cancel": "ரத்து செய்",
+  "confirm": "உறுதி செய்",
+  "findNearbyDevice": "அருகிலுள்ள சாதனத்தை கண்டறி",
+  "groupChat": "குழு உரையாடல்",
+  "settings": "அமைப்புகள்",
+  "@welcomeText": {
+    "description": "பயனருக்கு வரவேற்கும் செய்தி"
+  },
+  "@settings": {
+    "description": "அமைப்புகள் பக்கத்திற்கான தலைப்பு"
+  }
+}
+
+  
