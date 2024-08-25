@@ -1,162 +1,232 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:ntu_fyp_chatalone/generated/l10n.dart'; // Import localization
 
 TextEditingController txtController = TextEditingController();
 
 class Home extends StatefulWidget {
-  String name;
+  final String name;
+
   Home({required this.name});
+
   @override
   HomeScreenState createState() => HomeScreenState();
 }
 
 class HomeScreenState extends State<Home> {
-  String text = "";
+  late String welcomeText;
+  late String nameText;
 
-  void updateTitle() {
+  @override
+  void initState() {
+    super.initState();
+    // Do not initialize localized strings here
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Correct place to initialize localized strings
+    welcomeText = S.of(context).welcomeText;
+    nameText = widget.name;
+  }
+
+  void _updateTitle(String newName) {
     setState(() {
-      text = "Welcome " + this.widget.name;
+      nameText = newName;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    updateTitle();
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: Color.fromARGB(255, 17, 20, 17),
-        foregroundColor: Colors.white,
-        centerTitle: true,
-        title: Row(
-          textDirection: TextDirection.rtl,
-          children: [
-            IconButton(
-                icon: new Icon(Icons.person),
-                color: Colors.white,
-                onPressed: () => showDialog(
-                    context: context,
-                    builder: (BuildContext context) => AlertDialog(
-                          title: Text("Profile Name Change"),
-                          content: TextFormField(
-                              controller: txtController,
-                              decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                  labelText: 'Enter New Name')),
-                          actions: <Widget>[
-                            TextButton(
-                                onPressed: () =>
-                                    Navigator.pop(context, 'Cancel'),
-                                child: const Text('Cancel')),
-                            TextButton(
-                              onPressed: () => Navigator.of(context)
-                                  .pushReplacementNamed('home',
-                                      arguments: txtController.text),
-                              child: const Text('Confirm'),
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+
+    return SafeArea(
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        backgroundColor: theme.scaffoldBackgroundColor, // Use theme background
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(100.0), // Height of the AppBar
+          child: AppBar(
+            automaticallyImplyLeading: false,
+            backgroundColor: theme.appBarTheme.backgroundColor,
+            foregroundColor: theme.appBarTheme.foregroundColor,
+            flexibleSpace: Center(
+              // Center the content vertically
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                    horizontal: 10.0), // Horizontal padding
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.center, // Center vertically
+                  children: [
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          welcomeText,
+                          style: textTheme.titleMedium?.copyWith(
+                            color: theme.textTheme.bodyLarge?.color,
+                          ),
+                        ),
+                        Container(
+                          width:
+                              200, // Limit the width of the text to ensure truncation
+                          child: Text(
+                            nameText,
+                            style: textTheme.titleLarge?.copyWith(
+                              color: theme.textTheme.bodyLarge?.color,
                             ),
-                          ],
-                        ))),
-            SizedBox(width: 40),
-            Text(text,
-                style: TextStyle(
-                    color: Colors.white,
-                    //fontSize: 15,
-                    fontWeight: FontWeight.bold)),
+                            overflow:
+                                TextOverflow.ellipsis, // Truncate with ellipsis
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.settings),
+                          color: theme.iconTheme.color,
+                          onPressed: () {
+                            Navigator.of(context).pushNamed('settings');
+                          },
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.person),
+                          color: theme.iconTheme.color,
+                          onPressed: () => showDialog(
+                            context: context,
+                            builder: (BuildContext context) => AlertDialog(
+                              backgroundColor: theme.dialogBackgroundColor,
+                              title: Text(
+                                S.of(context).profileNameChange,
+                                style: textTheme.titleLarge,
+                              ),
+                              content: TextFormField(
+                                controller: txtController,
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor:
+                                      theme.inputDecorationTheme.fillColor,
+                                  labelText: S.of(context).enterNewName,
+                                  labelStyle: textTheme.subtitle1,
+                                ),
+                                style: textTheme.bodyText1,
+                              ),
+                              actions: <Widget>[
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, 'Cancel'),
+                                  child: Text(
+                                    S.of(context).cancel,
+                                    style: textTheme.button,
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    _updateTitle(txtController.text);
+                                    Navigator.pop(context);
+                                  },
+                                  child: Text(
+                                    S.of(context).confirm,
+                                    style: textTheme.button,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        body: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Image.asset(
+                "image/chatalone-logo.png",
+                height: 300,
+                width: 300,
+              ),
+            ),
+            SizedBox(height: 40),
+            Container(
+              padding: EdgeInsets.all(10), // Increase padding around the button
+              child: SizedBox(
+                width: 280, // Increase the width of the button
+                height: 100, // Increase the height of the button
+                child: Card(
+                  color: theme
+                      .primaryColor, // Use theme primary color for contrast
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  clipBehavior: Clip.antiAliasWithSaveLayer,
+                  child: InkWell(
+                    splashColor: theme.splashColor, // Use theme splash color
+                    onTap: () => Navigator.of(context)
+                        .pushNamed('start', arguments: widget.name),
+                    child: Center(
+                      child: Text(
+                        S.of(context).findNearbyDevice,
+                        style: textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20, // Larger font size
+                          color: theme
+                              .appBarTheme.foregroundColor, // Contrasting color
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              padding: EdgeInsets.all(10), // Increase padding around the button
+              child: SizedBox(
+                width: 280, // Increase the width of the button
+                height: 100, // Increase the height of the button
+                child: Card(
+                  color: theme
+                      .primaryColor, // Use theme primary color for contrast
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  clipBehavior: Clip.antiAliasWithSaveLayer,
+                  child: InkWell(
+                    splashColor: theme.splashColor, // Use theme splash color
+                    onTap: () => Navigator.of(context)
+                        .pushNamed('group', arguments: widget.name),
+                    child: Center(
+                      child: Text(
+                        S.of(context).groupChat,
+                        style: textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20, // Larger font size
+                          color: theme
+                              .appBarTheme.foregroundColor, // Contrasting color
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
-      ),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Align(
-            alignment: Alignment.center,
-            child: Image.asset("image/society.png", height: 320, width: 320),
-          ),
-          SizedBox(height: 20),
-          SizedBox(
-            width: 200, // Set a fixed width for the button
-            child: ElevatedButton(
-              onPressed: () => Navigator.of(context)
-                  .pushNamed('start', arguments: this.widget.name),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                padding: EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: Text(
-                'Find Nearby Device',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-          ),
-          SizedBox(height: 10),
-          SizedBox(
-            width: 200, // Set the same fixed width for the button
-            child: ElevatedButton(
-              onPressed: () => Navigator.of(context)
-                  .pushNamed('group', arguments: this.widget.name),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                padding: EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: Text(
-                'Group Chat',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-          ),
-
-          /*
-          Container(
-            padding: EdgeInsets.all(15.0),
-            child: Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(2)),
-              clipBehavior: Clip.antiAliasWithSaveLayer,
-              child: InkWell(
-                splashColor: Colors.blue.withAlpha(30),
-                onTap: () => Navigator.of(context)
-                    .pushNamed('start', arguments: this.widget.name),
-                child: Column(
-                  children: const <Widget>[
-                    Icon(Icons.phone_android),
-                    Text("Find Nearby Device")
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Container(
-            padding: EdgeInsets.all(15.0),
-            child: Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(2)),
-              clipBehavior: Clip.antiAliasWithSaveLayer,
-              child: InkWell(
-                splashColor: Colors.blue.withAlpha(30),
-                onTap: () => Navigator.of(context)
-                    .pushNamed('group', arguments: this.widget.name),
-                child: Column(
-                  children: const <Widget>[
-                    Icon(Icons.phone_android),
-                    Text("Group Chat")
-                  ],
-                ),
-              ),
-            ),
-          )*/
-        ],
       ),
     );
   }

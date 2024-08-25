@@ -1,0 +1,20 @@
+{
+  "@@locale": "zh",
+  "appTitle": "Chatalone",
+  "welcomeText": "欢迎, ",
+  "profileNameChange": "更改个人资料名称",
+  "enterNewName": "输入新名称",
+  "cancel": "取消",
+  "confirm": "确认",
+  "findNearbyDevice": "查找附近设备",
+  "groupChat": "群聊",
+  "settings": "设置",
+  "@welcomeText": {
+    "description": "欢迎用户的信息"
+  },
+  "@settings": {
+    "description": "设置页面的标题"
+  }
+}
+
+  

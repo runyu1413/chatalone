@@ -29,6 +29,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.18.1
+  intl_utils: ^2.0.0
+  shared_preferences: ^2.0.13
 
 
   # The following adds the Cupertino Icons font to your application.
@@ -41,6 +46,12 @@ dependencies:
   hive_flutter:
   profanity_filter: ^2.0.0
   image_picker: ^0.8.7
+  url_launcher: ^6.3.0
+  flutter_sound: ^9.11.2
+  permission_handler: ^11.3.1
+  audioplayers: ^6.0.0
+  video_player: ^2.9.1
+  gallery_saver: ^2.3.2
 
 dev_dependencies:
   flutter_test:

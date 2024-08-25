@@ -1,0 +1,18 @@
+{
+  "@@locale": "en",
+  "appTitle": "Chatalone",
+  "welcomeText": "Welcome, ",
+  "profileNameChange": "Profile Name Change",
+  "enterNewName": "Enter New Name",
+  "cancel": "Cancel",
+  "confirm": "Confirm",
+  "findNearbyDevice": "Find Nearby Device",
+  "groupChat": "Group Chat",
+  "settings": "Settings", 
+  "@welcomeText": {
+    "description": "Welcome message for the user"
+  },
+  "@settings": {
+    "description": "The title for the settings page"  
+  }
+}
