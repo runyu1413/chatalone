@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ntu_fyp_chatalone/main.dart'; // Ensure this import is correct
-import 'package:ntu_fyp_chatalone/generated/l10n.dart';
+//import 'package:ntu_fyp_chatalone/generated/l10n.dart';
+import 'home.dart';
 
 class SettingsPage extends StatefulWidget {
   @override
@@ -12,6 +13,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _selectedLanguage;
   ThemeMode? _themeMode;
   TextEditingController _usernameController = TextEditingController();
+  bool _isUsernameEmpty = false; // Add this variable
 
   @override
   void initState() {
@@ -42,7 +44,7 @@ class _SettingsPageState extends State<SettingsPage> {
     await prefs.setString('language_code', languageCode);
 
     setState(() {
-      _selectedLanguage = languageCode; // Update the selected language state
+      _selectedLanguage = languageCode;
     });
 
     // Update the app's locale
@@ -66,20 +68,39 @@ class _SettingsPageState extends State<SettingsPage> {
     MyApp.setTheme(context, themeMode);
   }
 
-  _changeUsername(String username) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString('username', username);
+  _saveUsername() async {
+    String username = _usernameController.text.trim();
+    if (username.isNotEmpty) {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString('username', username);
+    }
+  }
 
-    setState(() {
-      _usernameController.text = username; // Update the controller text
-    });
+  _navigateToHome() async {
+    String username = _usernameController.text.trim();
+
+    if (username.isNotEmpty) {
+      await _saveUsername();
+      setState(() {
+        _isUsernameEmpty = false;
+      });
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) => Home(name: _usernameController.text)),
+      );
+    } else {
+      setState(() {
+        _isUsernameEmpty = true; // Set this to true if the username is empty
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(S.of(context).settings),
+        title: const Text("Settings/Tetapan/设置/அமைப்பு"),
       ),
       body: ListView(
         padding: EdgeInsets.all(16.0),
@@ -87,18 +108,26 @@ class _SettingsPageState extends State<SettingsPage> {
           TextField(
             controller: _usernameController,
             decoration: InputDecoration(
-              labelText: 'Username',
+              labelText: 'Username/Nama Pengguna/用户名/பயனர்பெயர்',
               border: OutlineInputBorder(),
+              errorText: _isUsernameEmpty
+                  ? 'Please enter a username\nSila masukkan nama pengguna\n请输入用户名\nதயவுசெய்து பயனர் பெயரை உள்ளிடுங்கள்'
+                  : null,
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(
+                  color: _isUsernameEmpty ? Colors.red : Colors.blue,
+                ),
+              ),
             ),
-            onSubmitted: _changeUsername,
+            onSubmitted: (_) => _saveUsername(),
           ),
           SizedBox(height: 20),
           ListTile(
-            title: Text('Language/Bahasa/语言/மொழி'),
+            title: const Text('Language/Bahasa/语言/மொழி'),
             subtitle: Column(
               children: [
                 RadioListTile<String>(
-                  title: Text('English'),
+                  title: const Text('English'),
                   value: 'en',
                   groupValue: _selectedLanguage,
                   onChanged: (String? value) {
@@ -108,7 +137,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
                 RadioListTile<String>(
-                  title: Text('Melayu'),
+                  title: const Text('Melayu'),
                   value: 'ms',
                   groupValue: _selectedLanguage,
                   onChanged: (String? value) {
@@ -118,7 +147,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
                 RadioListTile<String>(
-                  title: Text('简体中文'),
+                  title: const Text('简体中文'),
                   value: 'zh',
                   groupValue: _selectedLanguage,
                   onChanged: (String? value) {
@@ -128,7 +157,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
                 RadioListTile<String>(
-                  title: Text('தமிழ்'),
+                  title: const Text('தமிழ்'),
                   value: 'ta',
                   groupValue: _selectedLanguage,
                   onChanged: (String? value) {
@@ -140,13 +169,13 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-          Divider(),
+          const Divider(),
           ListTile(
-            title: Text('Theme'),
+            title: const Text('Theme/Tema/主题/வடிகம்'),
             subtitle: Column(
               children: [
                 RadioListTile<ThemeMode>(
-                  title: Text('Light Mode'),
+                  title: const Text('Light Mode/Cahaya/亮/வெளிச்சம்'),
                   value: ThemeMode.light,
                   groupValue: _themeMode,
                   onChanged: (ThemeMode? value) {
@@ -156,7 +185,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
                 RadioListTile<ThemeMode>(
-                  title: Text('Dark Mode'),
+                  title: const Text('Dark Mode/Gelap/黑/கருப்பு'),
                   value: ThemeMode.dark,
                   groupValue: _themeMode,
                   onChanged: (ThemeMode? value) {
@@ -166,7 +195,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
                 RadioListTile<ThemeMode>(
-                  title: Text('System Default'),
+                  title: const Text(
+                      'System Default/Default Sistem/系统默认/சிஸ்டம் இயல்பு'),
                   value: ThemeMode.system,
                   groupValue: _themeMode,
                   onChanged: (ThemeMode? value) {
@@ -177,6 +207,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _navigateToHome,
+            child: const Text('Done/Selesai/完成/முடி'),
           ),
         ],
       ),

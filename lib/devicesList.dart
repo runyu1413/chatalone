@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
-
 import 'package:device_info/device_info.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -55,14 +54,14 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
             SizedBox(width: 40),
             Text(
               "Finding nearby devices",
-              style: textTheme.headline6?.copyWith(fontFamily: 'RobotoMono'),
+              style: textTheme.titleLarge?.copyWith(fontFamily: 'RobotoMono'),
             ),
           ],
         ),
       ),
       bottomNavigationBar: Container(
         height: 60,
-        color: theme.bottomAppBarColor,
+        color: theme.bottomAppBarTheme.color,
         child: InkWell(
           onTap: () => Navigator.push(
             context,
@@ -84,7 +83,8 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
                 ),
                 Text(
                   'Mesh Chat',
-                  style: textTheme.button?.copyWith(fontFamily: 'RobotoMono'),
+                  style:
+                      textTheme.labelLarge?.copyWith(fontFamily: 'RobotoMono'),
                 ),
               ],
             ),
@@ -110,13 +110,13 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
                             SizedBox(height: 9.0),
                             Text(
                               device.deviceName,
-                              style: textTheme.bodyText1?.copyWith(
+                              style: textTheme.bodyLarge?.copyWith(
                                 fontFamily: 'RobotoMono',
                               ),
                             ),
                             Text(
                               getStateName(device.state),
-                              style: textTheme.bodyText2?.copyWith(
+                              style: textTheme.bodyMedium?.copyWith(
                                 color: getStateColor(device.state, theme),
                               ),
                             ),
@@ -221,7 +221,7 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
   Color getStateColor(SessionState state, ThemeData theme) {
     switch (state) {
       case SessionState.notConnected:
-        return theme.errorColor;
+        return theme.colorScheme.error;
       case SessionState.connecting:
         return theme.disabledColor;
       default:
@@ -236,7 +236,7 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
       case SessionState.connecting:
         return theme.disabledColor;
       default:
-        return theme.errorColor;
+        return theme.colorScheme.error;
     }
   }
 

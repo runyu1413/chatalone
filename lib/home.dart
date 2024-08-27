@@ -92,9 +92,11 @@ class HomeScreenState extends State<Home> {
                           icon: Icon(Icons.settings),
                           color: theme.iconTheme.color,
                           onPressed: () {
-                            Navigator.of(context).pushNamed('settings');
+                            Navigator.of(context)
+                                .pushReplacementNamed('settings');
                           },
                         ),
+                        /*
                         IconButton(
                           icon: Icon(Icons.person),
                           color: theme.iconTheme.color,
@@ -139,7 +141,7 @@ class HomeScreenState extends State<Home> {
                               ],
                             ),
                           ),
-                        ),
+                        ), */
                       ],
                     ),
                   ],

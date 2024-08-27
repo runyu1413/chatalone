@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -18,12 +17,14 @@ class ChatMessage {
   bool autoDelete;
   int? timeRemaining;
   Timer? timer;
+  DateTime timestamp;
   ChatMessage? replyTo;
 
   ChatMessage({
     required this.messageContent,
     required this.messageType,
     required this.messageFormat,
+    required this.timestamp,
     this.isEdited = false,
     this.reaction,
     this.autoDelete = false,
@@ -48,6 +49,13 @@ class _Chat extends State<Chat> {
   late StreamSubscription receivedDataSubscription;
   final filter = ProfanityFilter();
   List<ChatMessage> messages = [];
+  List<ChatMessage> filteredMessages = [];
+  List<int> searchResults = [];
+  int currentSearchIndex = 0;
+
+  String searchTerm = '';
+  bool isSearching = false;
+
   final myController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   int? editingIndex;
@@ -74,6 +82,7 @@ class _Chat extends State<Chat> {
   void addMessageToList(ChatMessage obj) {
     setState(() {
       messages.add(obj);
+      filteredMessages = messages;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
@@ -89,6 +98,7 @@ class _Chat extends State<Chat> {
           timer.cancel();
           setState(() {
             messages.remove(obj);
+            filteredMessages = messages;
           });
           this.widget.nearbyService.sendMessage(
               this.widget.connected_device.deviceId, "delete|auto");
@@ -100,6 +110,7 @@ class _Chat extends State<Chat> {
   void deleteMessage(int index) {
     setState(() {
       messages.removeAt(index);
+      filteredMessages = messages;
     });
     this
         .widget
@@ -108,7 +119,31 @@ class _Chat extends State<Chat> {
   }
 
   void deleteMessageForBoth(int index) {
-    deleteMessage(index);
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Delete Message"),
+          content: Text(
+              "Are you sure you want to delete this message? This action cannot be undone."),
+          actions: <Widget>[
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text("Delete"),
+              onPressed: () {
+                Navigator.of(context).pop();
+                deleteMessage(index);
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void editMessage(int index) {
@@ -123,6 +158,7 @@ class _Chat extends State<Chat> {
       setState(() {
         messages[editingIndex!].messageContent = newText;
         messages[editingIndex!].isEdited = true;
+        filteredMessages = messages;
       });
       this.widget.nearbyService.sendMessage(
           this.widget.connected_device.deviceId, "edit|$editingIndex|$newText");
@@ -137,13 +173,15 @@ class _Chat extends State<Chat> {
     });
   }
 
-  void sendMessage(String content, {bool autoDelete = false}) {
+  void sendMessage(String content,
+      {bool autoDelete = false, int? timeInSeconds}) {
     var obj = ChatMessage(
       messageContent: content,
       messageType: "sender",
       messageFormat: "message",
       autoDelete: autoDelete,
-      timeRemaining: autoDelete ? 10 : null,
+      timeRemaining: autoDelete ? timeInSeconds ?? 10 : null,
+      timestamp: DateTime.now().toUtc().add(Duration(hours: 8)),
       replyTo: replyToMessage,
     );
     addMessageToList(obj);
@@ -154,7 +192,7 @@ class _Chat extends State<Chat> {
               (replyToMessage != null
                   ? "|reply|" + replyToMessage!.messageContent
                   : "") +
-              (autoDelete ? "|auto" : ""),
+              (autoDelete ? "|auto|$timeInSeconds" : ""),
         );
     myController.clear();
     setState(() {
@@ -164,11 +202,16 @@ class _Chat extends State<Chat> {
 
   void reactToMessage(int index, String reaction) {
     setState(() {
-      messages[index].reaction = reaction;
+      if (messages[index].reaction == reaction) {
+        messages[index].reaction = null;
+      } else {
+        messages[index].reaction = reaction;
+      }
+      filteredMessages = messages;
     });
     this.widget.nearbyService.sendMessage(
           this.widget.connected_device.deviceId,
-          "react|$index|$reaction",
+          "react|$index|${messages[index].reaction ?? ''}",
         );
   }
 
@@ -189,6 +232,64 @@ class _Chat extends State<Chat> {
     }
   }
 
+  void _scrollToMessage(int index) {
+    final double itemHeight = 100.0;
+    final double screenHeight = MediaQuery.of(context).size.height;
+    final double offset =
+        (index * itemHeight) - (screenHeight / 2) + (itemHeight / 2);
+
+    _scrollController.animateTo(
+      offset < 0 ? 0 : offset,
+      duration: Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _searchMessages(String query) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      setState(() {
+        searchTerm = query;
+        if (query.isEmpty) {
+          filteredMessages = messages;
+          searchResults.clear();
+        } else {
+          searchResults.clear();
+          for (int i = 0; i < messages.length; i++) {
+            if (messages[i]
+                .messageContent
+                .toLowerCase()
+                .contains(query.toLowerCase())) {
+              searchResults.add(i);
+            }
+          }
+          if (searchResults.isNotEmpty) {
+            currentSearchIndex = 0;
+            _scrollToMessage(searchResults[currentSearchIndex]);
+          }
+        }
+      });
+    });
+  }
+
+  void _nextSearchResult() {
+    if (searchResults.isNotEmpty) {
+      setState(() {
+        currentSearchIndex = (currentSearchIndex + 1) % searchResults.length;
+        _scrollToMessage(searchResults[currentSearchIndex]);
+      });
+    }
+  }
+
+  void _previousSearchResult() {
+    if (searchResults.isNotEmpty) {
+      setState(() {
+        currentSearchIndex = (currentSearchIndex - 1 + searchResults.length) %
+            searchResults.length;
+        _scrollToMessage(searchResults[currentSearchIndex]);
+      });
+    }
+  }
+
   @override
   void init() {
     receivedDataSubscription =
@@ -198,61 +299,75 @@ class _Chat extends State<Chat> {
         int indexToDelete = int.parse(splited[1]);
         setState(() {
           messages.removeAt(indexToDelete);
+          filteredMessages = messages;
         });
       } else if (splited[0] == "edit") {
         int indexToEdit = int.parse(splited[1]);
         setState(() {
           messages[indexToEdit].messageContent = splited[2];
           messages[indexToEdit].isEdited = true;
+          filteredMessages = messages;
         });
       } else if (splited[0] == "react") {
         int indexToReact = int.parse(splited[1]);
         String reaction = splited[2];
         setState(() {
           messages[indexToReact].reaction = reaction;
+          filteredMessages = messages;
         });
       } else if (splited[0] == "message") {
         var replyMessage;
+        int? autoDeleteTime;
         if (splited.length > 3 && splited[2] == "reply") {
           replyMessage = ChatMessage(
             messageContent: splited[3],
             messageType: "receiver",
             messageFormat: "message",
+            timestamp: DateTime.now().toUtc().add(Duration(hours: 8)),
           );
+          autoDeleteTime = int.tryParse(splited[4]);
+        } else if (splited.contains("auto")) {
+          autoDeleteTime = int.tryParse(splited.last);
         }
         var obj = ChatMessage(
           messageContent: splited[1],
           messageType: "receiver",
           messageFormat: "message",
-          autoDelete: splited.contains("auto"),
-          timeRemaining: splited.contains("auto") ? 10 : null,
+          autoDelete: autoDeleteTime != null,
+          timeRemaining: autoDeleteTime ?? 10,
           replyTo: replyMessage,
+          timestamp: DateTime.now().toUtc().add(Duration(hours: 8)),
         );
         addMessageToList(obj);
       } else if (splited[0] == "tictactoe") {
         if (splited[1] == "start") {
           setState(() {
             ticTacToeGame = TicTacToeGame();
-            currentDevicePlayer = splited[2]; // Set this device's role ("X")
-            ticTacToeGame!.currentPlayer = "O"; // Start with "O"
+            currentDevicePlayer = "O";
+            ticTacToeGame!.currentPlayer = "X";
           });
         } else if (splited[1] == "move") {
           int index = int.parse(splited[2]);
           String player = splited[3];
           if (ticTacToeGame != null && ticTacToeGame!.board[index] == "") {
             setState(() {
-              ticTacToeGame!.board[index] =
-                  player; // Update the board with the received move
-              ticTacToeGame!._checkGameStatus(); // Check if the game has ended
+              ticTacToeGame!.board[index] = player;
+              ticTacToeGame!._checkGameStatus();
             });
             if (!ticTacToeGame!.isGameOver) {
-              // Switch the current player based on the received move
-              ticTacToeGame!.currentPlayer = player == "O" ? "X" : "O";
+              ticTacToeGame!.currentPlayer = player == "X" ? "O" : "X";
             }
             if (ticTacToeGame!.isGameOver) {
               showGameOverDialog();
             }
           }
+        } else if (splited[1] == "end") {
+          setState(() {
+            ticTacToeGame = null;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Your opponent ended game.")),
+          );
         }
       }
     });
@@ -265,17 +380,17 @@ class _Chat extends State<Chat> {
     });
   }
 
-  TextSpan _buildMessageContent(ChatMessage message) {
-    final theme = Theme.of(context); // Access theme data
+  TextSpan _buildMessageContent(ChatMessage message, String? searchTerm) {
+    final theme = Theme.of(context);
     final String text = message.messageContent;
 
     final RegExp pattern = RegExp(
-      r'\*\*(.*?)\*\*|' // Bold
-      r'_(.*?)_|' // Underline
-      r'~(.*?)~|' // Strikethrough
-      r'\*(.*?)\*|' // Italic
-      r'~highlight\{(.*?)\}|' // Highlight
-      r"((https?:\/\/)?[a-zA-Z0-9\-\._~:\/\?#\[\]@!\$&\'\(\)\*\+,;=]+\.[a-zA-Z0-9\-\._~:\/\?#\[\]@!\$&\'\(\)\*\+,;=]+)", // URL
+      r'\*\*(.*?)\*\*|'
+      r'_(.*?)_|'
+      r'~(.*?)~|'
+      r'\*(.*?)\*|'
+      r'~highlight\{(.*?)\}|'
+      r"((https?:\/\/)?[a-zA-Z0-9\-\._~:\/\?#\[\]@!\$&\'\(\)\*\+,;=]+\.[a-zA-Z0-9\-\._~:\/\?#\[\]@!\$&\'\(\)\*\+,;=]+)",
       caseSensitive: false,
     );
 
@@ -286,8 +401,17 @@ class _Chat extends State<Chat> {
       if (match.start > lastMatchEnd) {
         spans.add(TextSpan(
           text: text.substring(lastMatchEnd, match.start),
-          style: TextStyle(color: Colors.white), // Set text color to white
+          style: TextStyle(color: Colors.white),
         ));
+      }
+
+      TextStyle highlightStyle = TextStyle(color: Colors.white);
+
+      if (searchTerm != null && searchTerm.isNotEmpty) {
+        highlightStyle = TextStyle(
+          color: Colors.yellow,
+          fontSize: 16,
+        );
       }
 
       if (match.group(1) != null) {
@@ -295,7 +419,13 @@ class _Chat extends State<Chat> {
           text: match.group(1),
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: Colors.white, // Set text color to white
+            color: searchTerm != null &&
+                    match
+                        .group(1)!
+                        .toLowerCase()
+                        .contains(searchTerm.toLowerCase())
+                ? highlightStyle.color
+                : Colors.white,
             fontSize: 16,
           ),
         ));
@@ -304,7 +434,13 @@ class _Chat extends State<Chat> {
           text: match.group(2),
           style: TextStyle(
             decoration: TextDecoration.underline,
-            color: Colors.white, // Set text color to white
+            color: searchTerm != null &&
+                    match
+                        .group(2)!
+                        .toLowerCase()
+                        .contains(searchTerm.toLowerCase())
+                ? highlightStyle.color
+                : Colors.white,
             fontSize: 16,
           ),
         ));
@@ -313,7 +449,13 @@ class _Chat extends State<Chat> {
           text: match.group(3),
           style: TextStyle(
             decoration: TextDecoration.lineThrough,
-            color: Colors.white, // Set text color to white
+            color: searchTerm != null &&
+                    match
+                        .group(3)!
+                        .toLowerCase()
+                        .contains(searchTerm.toLowerCase())
+                ? highlightStyle.color
+                : Colors.white,
             fontSize: 16,
           ),
         ));
@@ -322,7 +464,13 @@ class _Chat extends State<Chat> {
           text: match.group(4),
           style: TextStyle(
             fontStyle: FontStyle.italic,
-            color: Colors.white, // Set text color to white
+            color: searchTerm != null &&
+                    match
+                        .group(4)!
+                        .toLowerCase()
+                        .contains(searchTerm.toLowerCase())
+                ? highlightStyle.color
+                : Colors.white,
             fontSize: 16,
           ),
         ));
@@ -331,7 +479,7 @@ class _Chat extends State<Chat> {
           text: match.group(5),
           style: TextStyle(
             backgroundColor: Colors.yellow,
-            color: Colors.white, // Set text color to white
+            color: Colors.white,
             fontSize: 16,
           ),
         ));
@@ -359,16 +507,30 @@ class _Chat extends State<Chat> {
     if (lastMatchEnd < text.length) {
       spans.add(TextSpan(
         text: text.substring(lastMatchEnd),
-        style: TextStyle(color: Colors.white), // Set text color to white
+        style: TextStyle(
+          color: searchTerm != null &&
+                  searchTerm.isNotEmpty &&
+                  text
+                      .substring(lastMatchEnd)
+                      .toLowerCase()
+                      .contains(searchTerm.toLowerCase())
+              ? Colors.yellow
+              : Colors.white,
+        ),
       ));
     }
 
     return TextSpan(children: spans);
   }
 
+  String _formatTimestamp(DateTime timestamp) {
+    final DateFormat formatter = DateFormat('yyyy-MM-dd HH:mm', 'en_SG');
+    return formatter.format(timestamp);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context); // Get theme data
+    final theme = Theme.of(context);
     final textTheme = theme.textTheme;
 
     return Scaffold(
@@ -390,38 +552,63 @@ class _Chat extends State<Chat> {
                     color: theme.iconTheme.color,
                   ),
                 ),
-                SizedBox(
-                  width: 13,
-                ),
+                SizedBox(width: 13),
                 Expanded(
-                  child: Column(
-                    textDirection: TextDirection.rtl,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      SizedBox(
-                        height: 6,
-                      ),
-                      Text(this.widget.connected_device.deviceName,
-                          style: textTheme.titleLarge?.copyWith(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              fontFamily: 'RobotoMono',
-                              color: theme.textTheme.bodyLarge?.color)),
-                      SizedBox(
-                        height: 3,
-                      ),
-                      Text(
-                        "connected",
-                        style: textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.secondary,
-                          fontSize: 12,
-                          fontFamily: 'RobotoMono',
+                  child: isSearching
+                      ? TextField(
+                          autofocus: true,
+                          onChanged: (value) {
+                            _searchMessages(value);
+                          },
+                          decoration: InputDecoration(
+                            hintText: "Search...",
+                            border: InputBorder.none,
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            Text(
+                              this.widget.connected_device.deviceName,
+                              style: textTheme.titleLarge?.copyWith(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w500,
+                                fontFamily: 'RobotoMono',
+                                color: theme.textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                          ],
                         ),
+                ),
+                IconButton(
+                  icon: Icon(isSearching ? Icons.clear : Icons.search),
+                  onPressed: () {
+                    setState(() {
+                      if (isSearching) {
+                        isSearching = false;
+                        searchTerm = '';
+                        searchResults.clear();
+                        filteredMessages = messages;
+                      } else {
+                        isSearching = true;
+                      }
+                    });
+                  },
+                ),
+                if (searchResults.isNotEmpty)
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.arrow_upward),
+                        onPressed: _previousSearchResult,
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.arrow_downward),
+                        onPressed: _nextSearchResult,
                       ),
                     ],
                   ),
-                ),
               ],
             ),
           ),
@@ -429,49 +616,52 @@ class _Chat extends State<Chat> {
       ),
       body: Column(
         children: <Widget>[
-          // Toolbar below the AppBar
-          Container(
-            color: theme.scaffoldBackgroundColor,
-            padding: EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.format_bold),
-                  onPressed:
-                      isTextSelected ? () => _formatSelectedText('bold') : null,
-                ),
-                IconButton(
-                  icon: Icon(Icons.format_italic),
-                  onPressed: isTextSelected
-                      ? () => _formatSelectedText('italic')
-                      : null,
-                ),
-                IconButton(
-                  icon: Icon(Icons.format_underline),
-                  onPressed: isTextSelected
-                      ? () => _formatSelectedText('underline')
-                      : null,
-                ),
-                IconButton(
-                  icon: Icon(Icons.format_strikethrough),
-                  onPressed: isTextSelected
-                      ? () => _formatSelectedText('strikethrough')
-                      : null,
-                ),
-                IconButton(
-                  icon: Icon(Icons.highlight),
-                  onPressed: isTextSelected
-                      ? () => _formatSelectedText('highlight')
-                      : null,
-                ),
-              ],
+          Visibility(
+            visible: isTextSelected,
+            child: Container(
+              color: theme.scaffoldBackgroundColor,
+              padding: EdgeInsets.symmetric(horizontal: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.format_bold),
+                    onPressed: isTextSelected
+                        ? () => _formatSelectedText('bold')
+                        : null,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.format_italic),
+                    onPressed: isTextSelected
+                        ? () => _formatSelectedText('italic')
+                        : null,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.format_underline),
+                    onPressed: isTextSelected
+                        ? () => _formatSelectedText('underline')
+                        : null,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.format_strikethrough),
+                    onPressed: isTextSelected
+                        ? () => _formatSelectedText('strikethrough')
+                        : null,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.highlight),
+                    onPressed: isTextSelected
+                        ? () => _formatSelectedText('highlight')
+                        : null,
+                  ),
+                ],
+              ),
             ),
           ),
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              itemCount: messages.length,
+              itemCount: filteredMessages.length,
               padding: EdgeInsets.only(top: 10, bottom: 10),
               itemBuilder: (context, index) {
                 return GestureDetector(
@@ -481,33 +671,82 @@ class _Chat extends State<Chat> {
                       builder: (BuildContext context) {
                         return AlertDialog(
                           title: Text(
-                            "Edit, Delete, Reply, React, or Copy",
+                            "Message Options",
                             style: textTheme.titleLarge,
                           ),
                           content: Text(
-                            "Would you like to edit, delete, reply, react to, or copy this message?",
+                            "What would you like to do to this message?",
                             style: textTheme.bodyMedium,
                           ),
                           actions: <Widget>[
+                            if (filteredMessages[index].messageType ==
+                                "sender") ...[
+                              TextButton(
+                                child:
+                                    Text("Edit", style: textTheme.labelLarge),
+                                onPressed: () {
+                                  editMessage(index);
+                                  Navigator.of(context).pop();
+                                },
+                              ),
+                              TextButton(
+                                child:
+                                    Text("Delete", style: textTheme.labelLarge),
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  deleteMessageForBoth(index);
+                                },
+                              ),
+                            ],
+                            if (filteredMessages[index].messageType ==
+                                "receiver")
+                              TextButton(
+                                child:
+                                    Text("React", style: textTheme.labelLarge),
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (BuildContext context) {
+                                      return AlertDialog(
+                                        title: Text(
+                                          "Select a Reaction",
+                                          style: textTheme.titleLarge,
+                                        ),
+                                        content: Wrap(
+                                          spacing: 10,
+                                          children: [
+                                            IconButton(
+                                              icon: Text("👍"),
+                                              onPressed: () {
+                                                reactToMessage(index, "👍");
+                                                Navigator.of(context).pop();
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: Text("❤️"),
+                                              onPressed: () {
+                                                reactToMessage(index, "❤️");
+                                                Navigator.of(context).pop();
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: Text("😂"),
+                                              onPressed: () {
+                                                reactToMessage(index, "😂");
+                                                Navigator.of(context).pop();
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
                             TextButton(
-                              child:
-                                  Text("Cancel", style: textTheme.labelLarge),
+                              child: Text("Copy", style: textTheme.labelLarge),
                               onPressed: () {
-                                Navigator.of(context).pop();
-                              },
-                            ),
-                            TextButton(
-                              child: Text("Edit", style: textTheme.labelLarge),
-                              onPressed: () {
-                                editMessage(index);
-                                Navigator.of(context).pop();
-                              },
-                            ),
-                            TextButton(
-                              child:
-                                  Text("Delete", style: textTheme.labelLarge),
-                              onPressed: () {
-                                deleteMessageForBoth(index);
+                                copyMessage(index);
                                 Navigator.of(context).pop();
                               },
                             ),
@@ -519,51 +758,12 @@ class _Chat extends State<Chat> {
                               },
                             ),
                             TextButton(
-                              child: Text("React", style: textTheme.labelLarge),
+                              child: Text(
+                                "Cancel",
+                                style: textTheme.labelLarge
+                                    ?.copyWith(color: Colors.red),
+                              ),
                               onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (BuildContext context) {
-                                    return AlertDialog(
-                                      title: Text(
-                                        "Select a Reaction",
-                                        style: textTheme.titleLarge,
-                                      ),
-                                      content: Wrap(
-                                        spacing: 10,
-                                        children: [
-                                          IconButton(
-                                            icon: Text("👍"),
-                                            onPressed: () {
-                                              reactToMessage(index, "👍");
-                                              Navigator.of(context).pop();
-                                            },
-                                          ),
-                                          IconButton(
-                                            icon: Text("❤️"),
-                                            onPressed: () {
-                                              reactToMessage(index, "❤️");
-                                              Navigator.of(context).pop();
-                                            },
-                                          ),
-                                          IconButton(
-                                            icon: Text("😂"),
-                                            onPressed: () {
-                                              reactToMessage(index, "😂");
-                                              Navigator.of(context).pop();
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                            TextButton(
-                              child: Text("Copy", style: textTheme.labelLarge),
-                              onPressed: () {
-                                copyMessage(index);
                                 Navigator.of(context).pop();
                               },
                             ),
@@ -577,19 +777,20 @@ class _Chat extends State<Chat> {
                     padding: EdgeInsets.only(
                         left: 10, right: 14, top: 10, bottom: 10),
                     child: Align(
-                      alignment: (messages[index].messageType == "receiver"
-                          ? Alignment.bottomLeft
-                          : Alignment.bottomRight),
+                      alignment:
+                          (filteredMessages[index].messageType == "receiver"
+                              ? Alignment.bottomLeft
+                              : Alignment.bottomRight),
                       child: Container(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
-                          color: Colors.green[800], // Dark green background
+                          color: Colors.green[800],
                         ),
                         padding: EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (messages[index].replyTo != null)
+                            if (filteredMessages[index].replyTo != null)
                               Container(
                                 padding: EdgeInsets.only(bottom: 5),
                                 decoration: BoxDecoration(
@@ -599,29 +800,38 @@ class _Chat extends State<Chat> {
                                   ),
                                 ),
                                 child: Text(
-                                  "Replying to: " +
-                                      messages[index].replyTo!.messageContent,
+                                  "Reply to: " +
+                                      filteredMessages[index]
+                                          .replyTo!
+                                          .messageContent,
                                   style: textTheme.bodySmall?.copyWith(
                                       fontSize: 12, color: Colors.white),
                                 ),
                               ),
                             RichText(
-                              text: _buildMessageContent(messages[index]),
+                              text: _buildMessageContent(
+                                  filteredMessages[index], searchTerm),
                             ),
-                            if (messages[index].isEdited)
+                            if (filteredMessages[index].isEdited)
                               Text("(edited)",
                                   style: textTheme.bodySmall?.copyWith(
-                                      fontSize: 10, color: Colors.white)),
-                            if (messages[index].reaction != null)
-                              Text(messages[index].reaction!,
+                                      fontSize: 6, color: Colors.white)),
+                            if (filteredMessages[index].reaction != null)
+                              Text(filteredMessages[index].reaction!,
                                   style: TextStyle(fontSize: 20)),
-                            if (messages[index].autoDelete &&
-                                messages[index].timeRemaining != null)
+                            if (filteredMessages[index].autoDelete &&
+                                filteredMessages[index].timeRemaining != null)
                               Text(
-                                "Self-destructs in ${messages[index].timeRemaining} seconds",
+                                "Self-destructs in ${filteredMessages[index].timeRemaining} seconds",
                                 style: textTheme.bodySmall?.copyWith(
                                     fontSize: 10, color: theme.errorColor),
                               ),
+                            Text(
+                              _formatTimestamp(
+                                  filteredMessages[index].timestamp),
+                              style: textTheme.bodySmall
+                                  ?.copyWith(fontSize: 6, color: Colors.white),
+                            ),
                           ],
                         ),
                       ),
@@ -640,10 +850,9 @@ class _Chat extends State<Chat> {
                 children: <Widget>[
                   Expanded(
                     child: Text(
-                      "Replying to: " + replyToMessage!.messageContent,
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: theme.textTheme.bodyLarge?.color,
-                      ),
+                      "Reply to: " + replyToMessage!.messageContent,
+                      style: textTheme.bodyMedium
+                          ?.copyWith(color: theme.textTheme.bodyLarge?.color),
                     ),
                   ),
                   IconButton(
@@ -657,15 +866,37 @@ class _Chat extends State<Chat> {
                 ],
               ),
             ),
+          if (editingIndex != null)
+            Container(
+              color: theme.cardColor,
+              padding: EdgeInsets.all(10),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      "Editing: ${messages[editingIndex!].messageContent}",
+                      style: textTheme.bodyMedium
+                          ?.copyWith(color: theme.textTheme.bodyLarge?.color),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: theme.iconTheme.color),
+                    onPressed: () {
+                      setState(() {
+                        editingIndex = null;
+                        myController.clear();
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
           Container(
             padding: EdgeInsets.only(left: 10, bottom: 10, top: 10),
             color: theme.scaffoldBackgroundColor,
             child: Row(
-              textDirection: TextDirection.ltr,
               children: <Widget>[
-                SizedBox(
-                  width: 15,
-                ),
+                SizedBox(width: 15),
                 Expanded(
                   child: TextFormField(
                     validator: (value) {
@@ -679,52 +910,64 @@ class _Chat extends State<Chat> {
                     style: textTheme.bodyLarge?.copyWith(
                         color: theme.textTheme.bodyLarge?.color,
                         fontFamily: 'RobotoMono'),
-                    textDirection: TextDirection.ltr,
                     decoration: InputDecoration(
                       hintText: editingIndex == null
                           ? "Enter your message..."
                           : "Edit your message...",
                       hintStyle: textTheme.bodyLarge?.copyWith(
-                        color: theme.textTheme.bodyMedium?.color,
-                        fontFamily: 'RobotoMono',
-                      ),
-                      hintTextDirection: TextDirection.ltr,
+                          color: theme.textTheme.bodyMedium?.color,
+                          fontFamily: 'RobotoMono'),
                       border: InputBorder.none,
                     ),
                     controller: myController,
                   ),
                 ),
-                SizedBox(
-                  width: 15,
-                ),
+                SizedBox(width: 15),
                 GestureDetector(
                   onLongPress: () {
                     showDialog(
                       context: context,
                       builder: (BuildContext context) {
+                        int? timeInSeconds;
                         return AlertDialog(
-                          title: Text(
-                            "Send self-destructing message?",
-                            style: textTheme.titleLarge,
-                          ),
-                          content: Text(
-                            "Do you want this message to auto-delete after 10 seconds?",
-                            style: textTheme.bodyMedium,
+                          title: Text("Send self-destructing message?"),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text("Enter time in seconds (Minimum 1 second)"),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      keyboardType: TextInputType.number,
+                                      onChanged: (value) {
+                                        timeInSeconds = int.tryParse(value);
+                                      },
+                                      decoration: InputDecoration(
+                                        hintText: "Default: 10 seconds",
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text("seconds"),
+                                ],
+                              ),
+                            ],
                           ),
                           actions: <Widget>[
                             TextButton(
-                              child:
-                                  Text("Cancel", style: textTheme.labelLarge),
+                              child: Text("Cancel"),
                               onPressed: () {
                                 Navigator.of(context).pop();
                               },
                             ),
                             TextButton(
-                              child: Text("Send", style: textTheme.labelLarge),
+                              child: Text("Send"),
                               onPressed: () {
                                 Navigator.of(context).pop();
                                 sendMessage(myController.text,
-                                    autoDelete: true);
+                                    autoDelete: true,
+                                    timeInSeconds: timeInSeconds);
                               },
                             ),
                           ],
@@ -755,7 +998,6 @@ class _Chat extends State<Chat> {
                       Icons.play_circle_outline_rounded,
                       color: Colors.white,
                       size: 18,
-                      textDirection: TextDirection.ltr,
                     ),
                     backgroundColor: Colors.green[500],
                     elevation: 0,
@@ -774,29 +1016,44 @@ class _Chat extends State<Chat> {
   }
 
   Widget buildTicTacToeBoard() {
-    return GridView.builder(
-      shrinkWrap: true,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 1.0,
-      ),
-      itemCount: 9,
-      itemBuilder: (context, index) {
-        return GestureDetector(
-          onTap: () => handleTicTacToeMove(index),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.black),
-            ),
-            child: Center(
-              child: Text(
-                ticTacToeGame!.board[index],
-                style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
-              ),
-            ),
+    return Column(
+      children: [
+        Text(
+          ticTacToeGame!.currentPlayer == currentDevicePlayer
+              ? "Your turn"
+              : "Opponent's turn",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        GridView.builder(
+          shrinkWrap: true,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            childAspectRatio: 1.0,
           ),
-        );
-      },
+          itemCount: 9,
+          itemBuilder: (context, index) {
+            return GestureDetector(
+              onTap: () => handleTicTacToeMove(index),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.black),
+                ),
+                child: Center(
+                  child: Text(
+                    ticTacToeGame!.board[index],
+                    style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        SizedBox(height: 20),
+        ElevatedButton(
+          onPressed: _confirmEndGame,
+          child: Text("End Game"),
+        ),
+      ],
     );
   }
 
@@ -835,30 +1092,50 @@ class _Chat extends State<Chat> {
   }
 
   void startTicTacToe() {
-    setState(() {
-      ticTacToeGame = TicTacToeGame();
-      currentDevicePlayer = "O"; // Set this device as "O"
-      ticTacToeGame!.currentPlayer = "O"; // The initiator starts as "O"
-    });
-    widget.nearbyService.sendMessage(widget.connected_device.deviceId,
-        "tictactoe|start|X"); // Tell the other device it is "X"
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Start Tic Tac Toe"),
+          content: Text("Are you sure you want to start a Tic Tac Toe game?"),
+          actions: <Widget>[
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text("Start"),
+              onPressed: () {
+                Navigator.of(context).pop();
+                setState(() {
+                  ticTacToeGame = TicTacToeGame();
+                  currentDevicePlayer = "X";
+                  ticTacToeGame!.currentPlayer = "X";
+                });
+                widget.nearbyService.sendMessage(
+                    widget.connected_device.deviceId, "tictactoe|start|O");
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void handleTicTacToeMove(int index) {
     if (ticTacToeGame != null &&
         ticTacToeGame!.currentPlayer == currentDevicePlayer) {
       if (ticTacToeGame!.board[index] == "") {
-        // Ensure the spot is empty
-        String player =
-            ticTacToeGame!.currentPlayer; // Capture the current player
+        String player = ticTacToeGame!.currentPlayer;
         if (ticTacToeGame!.makeMove(index)) {
           setState(() {});
           widget.nearbyService.sendMessage(
             widget.connected_device.deviceId,
-            "tictactoe|move|$index|$player", // Send the move to the opponent
+            "tictactoe|move|$index|$player",
           );
           if (!ticTacToeGame!.isGameOver) {
-            // Switch the current player locally after the move is made
             ticTacToeGame!.currentPlayer = player == "O" ? "X" : "O";
           }
           if (ticTacToeGame!.isGameOver) {
@@ -869,15 +1146,58 @@ class _Chat extends State<Chat> {
     }
   }
 
+  void _confirmEndGame() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("End Game"),
+          content: Text("Are you sure you want to end this game?"),
+          actions: <Widget>[
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text("End Game"),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _endGame();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _endGame() {
+    setState(() {
+      ticTacToeGame = null;
+    });
+    widget.nearbyService
+        .sendMessage(widget.connected_device.deviceId, "tictactoe|end");
+  }
+
   void showGameOverDialog() {
+    String message;
+
+    if (ticTacToeGame!.winner == "Draw") {
+      message = "It's a Draw!";
+    } else if (ticTacToeGame!.winner == currentDevicePlayer) {
+      message = "You win!";
+    } else {
+      message = "You lose!";
+    }
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text("Game Over"),
-          content: Text(ticTacToeGame!.winner == "Draw"
-              ? "It's a Draw!"
-              : "${ticTacToeGame!.winner} Wins!"),
+          content: Text(message),
           actions: <Widget>[
             TextButton(
               child: Text("OK"),

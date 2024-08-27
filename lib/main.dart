@@ -1,28 +1,17 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'package:device_info/device_info.dart';
-import 'package:flutter_styled_toast/flutter_styled_toast.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
 import 'package:ntu_fyp_chatalone/createuser.dart';
 import 'package:ntu_fyp_chatalone/group.dart';
-import 'package:ntu_fyp_chatalone/model/user_model.dart';
-import 'package:hive/hive.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'home.dart';
 import 'devicesList.dart';
-import 'package:intl/intl.dart';
 import 'generated/l10n.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:ntu_fyp_chatalone/settings.dart'; // Adjust the path based on your project structure
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
-  Hive.registerAdapter(UsersAdapter());
-  await Hive.openBox<Users>('Username');
 
   SharedPreferences prefs = await SharedPreferences.getInstance();
   String? languageCode = prefs.getString('language_code') ?? 'en';
@@ -40,57 +29,17 @@ void main() async {
   runApp(MyApp(languageCode: languageCode, initialThemeMode: initialThemeMode));
 }
 
-Route<dynamic> generateRoute(RouteSettings settings) {
-  final userBox = Hive.box<Users>('Username');
-  switch (settings.name) {
-    case '/':
-      final String? user = userBox.get('Username')?.username;
-      if (user != null) {
-        return MaterialPageRoute(builder: (context) => Home(name: user));
-      } else {
-        return MaterialPageRoute(builder: (_) => CreateUser());
-      }
-    case 'home':
-      final usern = settings.arguments as String;
-      var device = Users(username: usern);
-      userBox.add(device);
-      print(userBox.get('Username')?.username);
-      return MaterialPageRoute(
-          builder: (context) => Home(
-                name: usern,
-              ));
-    case 'start':
-      final name = settings.arguments as String;
-      return MaterialPageRoute(
-          builder: (context) => DevicesListScreen(mydata: name));
-    case 'group':
-      final name = settings.arguments as String;
-      return MaterialPageRoute(
-          builder: (context) => GroupListScreen(mydata: name));
-    case 'settings': // Add this case for the settings route
-      return MaterialPageRoute(builder: (context) => SettingsPage());
-    default:
-      return MaterialPageRoute(
-          builder: (_) => Scaffold(
-                body: Center(
-                    child: Text('No route defined for ${settings.name}')),
-              ));
-  }
-}
-
 class MyApp extends StatefulWidget {
   final String languageCode;
   final ThemeMode initialThemeMode;
 
   MyApp({required this.languageCode, required this.initialThemeMode});
 
-  // Define the setLocale method
   static void setLocale(BuildContext context, Locale newLocale) {
     _MyAppState? state = context.findAncestorStateOfType<_MyAppState>();
     state?.setLocale(newLocale);
   }
 
-  // Define the setTheme method
   static void setTheme(BuildContext context, ThemeMode newTheme) {
     _MyAppState? state = context.findAncestorStateOfType<_MyAppState>();
     state?.setTheme(newTheme);
@@ -121,7 +70,7 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       _themeMode = themeMode;
     });
-    _saveThemePreference(themeMode); // Save the theme preference
+    _saveThemePreference(themeMode);
   }
 
   void _saveThemePreference(ThemeMode themeMode) async {
@@ -135,13 +84,23 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  Future<String?> getUsername() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString('username');
+  }
+
+  Future<void> saveUsername(String username) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString('username', username);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       locale: _locale,
-      themeMode: _themeMode, // Apply the current theme mode
-      theme: ThemeData.light(), // Define your light theme here
-      darkTheme: ThemeData.dark(), // Define your dark theme here
+      themeMode: _themeMode,
+      theme: ThemeData.light(),
+      darkTheme: ThemeData.dark(),
       localizationsDelegates: [
         S.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -154,7 +113,54 @@ class _MyAppState extends State<MyApp> {
         const Locale('zh'), // Simplified Chinese
         const Locale('ta'), // Tamil
       ],
-      onGenerateRoute: generateRoute,
+      onGenerateRoute: (settings) {
+        switch (settings.name) {
+          case '/':
+            return MaterialPageRoute(
+              builder: (context) => FutureBuilder<String?>(
+                future: getUsername(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Scaffold(
+                      body: Center(child: CircularProgressIndicator()),
+                    );
+                  } else if (snapshot.hasData &&
+                      snapshot.data != null &&
+                      snapshot.data!.isNotEmpty) {
+                    return Home(name: snapshot.data!);
+                  } else {
+                    return SettingsPage(); // Direct to settings page if username is not set
+                  }
+                },
+              ),
+            );
+          case 'home':
+            final usern = settings.arguments as String;
+            saveUsername(usern);
+            return MaterialPageRoute(
+              builder: (context) => Home(name: usern),
+            );
+          case 'start':
+            final name = settings.arguments as String;
+            return MaterialPageRoute(
+              builder: (context) => DevicesListScreen(mydata: name),
+            );
+          case 'group':
+            final name = settings.arguments as String;
+            return MaterialPageRoute(
+              builder: (context) => GroupListScreen(mydata: name),
+            );
+          case 'settings':
+            return MaterialPageRoute(builder: (context) => SettingsPage());
+          default:
+            return MaterialPageRoute(
+              builder: (_) => Scaffold(
+                body: Center(
+                    child: Text('No route defined for ${settings.name}')),
+              ),
+            );
+        }
+      },
       initialRoute: '/',
       debugShowCheckedModeBanner: false,
     );
