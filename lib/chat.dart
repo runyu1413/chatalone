@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
@@ -7,6 +9,10 @@ import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
 import 'package:profanity_filter/profanity_filter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/gestures.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_tesseract_ocr/flutter_tesseract_ocr.dart';
+import 'home.dart';
+import 'tictactoe.dart';
 
 class ChatMessage {
   String messageContent;
@@ -19,6 +25,7 @@ class ChatMessage {
   Timer? timer;
   DateTime timestamp;
   ChatMessage? replyTo;
+  Uint8List? imageData;
 
   ChatMessage({
     required this.messageContent,
@@ -31,14 +38,22 @@ class ChatMessage {
     this.timeRemaining,
     this.timer,
     this.replyTo,
+    this.imageData,
   });
 }
 
 class Chat extends StatefulWidget {
   Device connected_device;
   NearbyService nearbyService;
-  var chat_state;
-  Chat({required this.connected_device, required this.nearbyService});
+  List<ChatMessage>? chat_state;
+  final String myData;
+
+  Chat({
+    required this.connected_device,
+    required this.nearbyService,
+    required this.myData,
+    this.chat_state,
+  });
 
   @override
   State<StatefulWidget> createState() => _Chat();
@@ -61,12 +76,16 @@ class _Chat extends State<Chat> {
   int? editingIndex;
   ChatMessage? replyToMessage;
   bool isTextSelected = false;
-  TicTacToeGame? ticTacToeGame;
   String? currentDevicePlayer;
 
   @override
   void initState() {
     super.initState();
+    messages = widget.chat_state ?? [];
+    filteredMessages = messages;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
     init();
     myController.addListener(_handleTextSelection);
   }
@@ -174,26 +193,42 @@ class _Chat extends State<Chat> {
   }
 
   void sendMessage(String content,
-      {bool autoDelete = false, int? timeInSeconds}) {
+      {Uint8List? imageData, bool autoDelete = false, int? timeInSeconds}) {
+    String message = imageData != null ? "image" : "message";
+    String finalMessage = "$message|" +
+        content +
+        (replyToMessage != null
+            ? "|reply|" + replyToMessage!.messageContent
+            : "") +
+        (autoDelete ? "|auto|$timeInSeconds" : "");
+
+    if (imageData != null) {
+      String base64Image =
+          base64Encode(imageData); // Convert image data to base64
+      finalMessage +=
+          "|$base64Image"; // Append the encoded image to the message
+      print("Sending Image: $finalMessage"); // Debug print
+    } else {
+      print("Sending Message: $finalMessage"); // Debug print
+    }
+
     var obj = ChatMessage(
       messageContent: content,
       messageType: "sender",
-      messageFormat: "message",
+      messageFormat: message,
       autoDelete: autoDelete,
       timeRemaining: autoDelete ? timeInSeconds ?? 10 : null,
       timestamp: DateTime.now().toUtc().add(Duration(hours: 8)),
       replyTo: replyToMessage,
+      imageData: imageData,
     );
+
     addMessageToList(obj);
-    this.widget.nearbyService.sendMessage(
-          this.widget.connected_device.deviceId,
-          "message|" +
-              content +
-              (replyToMessage != null
-                  ? "|reply|" + replyToMessage!.messageContent
-                  : "") +
-              (autoDelete ? "|auto|$timeInSeconds" : ""),
-        );
+    this
+        .widget
+        .nearbyService
+        .sendMessage(this.widget.connected_device.deviceId, finalMessage);
+
     myController.clear();
     setState(() {
       replyToMessage = null;
@@ -315,9 +350,11 @@ class _Chat extends State<Chat> {
           messages[indexToReact].reaction = reaction;
           filteredMessages = messages;
         });
-      } else if (splited[0] == "message") {
+      } else if (splited[0] == "message" || splited[0] == "image") {
         var replyMessage;
         int? autoDeleteTime;
+        Uint8List? imageData;
+
         if (splited.length > 3 && splited[2] == "reply") {
           replyMessage = ChatMessage(
             messageContent: splited[3],
@@ -329,46 +366,64 @@ class _Chat extends State<Chat> {
         } else if (splited.contains("auto")) {
           autoDeleteTime = int.tryParse(splited.last);
         }
+
+        if (splited[0] == "image" && splited.length > 2) {
+          imageData = base64Decode(
+              splited.last); // Decode the base64 string back to Uint8List
+        }
+
         var obj = ChatMessage(
           messageContent: splited[1],
           messageType: "receiver",
-          messageFormat: "message",
+          messageFormat: splited[0],
           autoDelete: autoDeleteTime != null,
           timeRemaining: autoDeleteTime ?? 10,
           replyTo: replyMessage,
           timestamp: DateTime.now().toUtc().add(Duration(hours: 8)),
+          imageData: imageData,
         );
+
         addMessageToList(obj);
-      } else if (splited[0] == "tictactoe") {
-        if (splited[1] == "start") {
-          setState(() {
-            ticTacToeGame = TicTacToeGame();
-            currentDevicePlayer = "O";
-            ticTacToeGame!.currentPlayer = "X";
-          });
-        } else if (splited[1] == "move") {
-          int index = int.parse(splited[2]);
-          String player = splited[3];
-          if (ticTacToeGame != null && ticTacToeGame!.board[index] == "") {
-            setState(() {
-              ticTacToeGame!.board[index] = player;
-              ticTacToeGame!._checkGameStatus();
-            });
-            if (!ticTacToeGame!.isGameOver) {
-              ticTacToeGame!.currentPlayer = player == "X" ? "O" : "X";
-            }
-            if (ticTacToeGame!.isGameOver) {
-              showGameOverDialog();
-            }
-          }
-        } else if (splited[1] == "end") {
-          setState(() {
-            ticTacToeGame = null;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Your opponent ended game.")),
-          );
-        }
+      } else if (splited[0] == "tictactoe" && splited[1] == "start") {
+        sendSystemMessage("Played Tic Tac Toe");
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TicTacToePage(
+              nearbyService: widget.nearbyService,
+              connectedDevice: widget.connected_device,
+              currentDevicePlayer: "O",
+              chat_state: messages,
+              myData: widget.myData,
+            ),
+          ),
+        );
+      } else if (splited[0] == "disconnect" &&
+          splited[1] == "partner_disconnected") {
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: Text("Disconnected"),
+              content: Text(
+                  "Your partner has disconnected. You will be returned to the home screen."),
+              actions: <Widget>[
+                TextButton(
+                  child: Text("OK"),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => Home(name: widget.myData),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            );
+          },
+        );
       }
     });
   }
@@ -540,19 +595,10 @@ class _Chat extends State<Chat> {
         backgroundColor: theme.appBarTheme.backgroundColor,
         flexibleSpace: SafeArea(
           child: Container(
-            padding: EdgeInsets.only(right: 16),
+            padding: EdgeInsets.only(right: 10),
             child: Row(
               children: <Widget>[
-                IconButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  icon: Icon(
-                    Icons.arrow_back,
-                    color: theme.iconTheme.color,
-                  ),
-                ),
-                SizedBox(width: 13),
+                SizedBox(width: 20),
                 Expanded(
                   child: isSearching
                       ? TextField(
@@ -566,7 +612,7 @@ class _Chat extends State<Chat> {
                           ),
                         )
                       : Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
                             Text(
@@ -609,6 +655,35 @@ class _Chat extends State<Chat> {
                       ),
                     ],
                   ),
+                IconButton(
+                  icon: Icon(Icons.exit_to_app, color: Colors.red),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: Text("Disconnect"),
+                          content: Text("Are you sure you want to disconnect?"),
+                          actions: <Widget>[
+                            TextButton(
+                              child: Text("Cancel"),
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                              },
+                            ),
+                            TextButton(
+                              child: Text("Disconnect"),
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                _disconnectAndExit();
+                              },
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -664,184 +739,308 @@ class _Chat extends State<Chat> {
               itemCount: filteredMessages.length,
               padding: EdgeInsets.only(top: 10, bottom: 10),
               itemBuilder: (context, index) {
-                return GestureDetector(
-                  onLongPress: () {
-                    showDialog(
-                      context: context,
-                      builder: (BuildContext context) {
-                        return AlertDialog(
-                          title: Text(
-                            "Message Options",
-                            style: textTheme.titleLarge,
+                if (filteredMessages[index].messageType == 'system') {
+                  return Container(
+                    alignment: Alignment.center,
+                    padding: EdgeInsets.only(
+                        left: 10, right: 10, top: 10, bottom: 10),
+                    child: Text(
+                      filteredMessages[index].messageContent,
+                      textAlign: TextAlign.center,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  );
+                } else if (filteredMessages[index].messageFormat == "image" &&
+                    filteredMessages[index].imageData != null) {
+                  return GestureDetector(
+                    onLongPress: () {
+                      if (filteredMessages[index].messageType == "sender") {
+                        deleteMessageForBoth(index);
+                      } else if (filteredMessages[index].messageType ==
+                          "receiver") {
+                        showDialog(
+                          context: context,
+                          builder: (BuildContext context) {
+                            return AlertDialog(
+                              title: Text("Select a Reaction"),
+                              content: Wrap(
+                                spacing: 10,
+                                children: [
+                                  IconButton(
+                                    icon: Text("👍"),
+                                    onPressed: () {
+                                      reactToMessage(index, "👍");
+                                      Navigator.of(context).pop();
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: Text("❤️"),
+                                    onPressed: () {
+                                      reactToMessage(index, "❤️");
+                                      Navigator.of(context).pop();
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: Text("😂"),
+                                    onPressed: () {
+                                      reactToMessage(index, "😂");
+                                      Navigator.of(context).pop();
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      }
+                    },
+                    child: Container(
+                      alignment:
+                          filteredMessages[index].messageType == "receiver"
+                              ? Alignment.centerLeft
+                              : Alignment.centerRight,
+                      padding: EdgeInsets.only(
+                          left: 14, right: 14, top: 10, bottom: 10),
+                      child: Column(
+                        crossAxisAlignment:
+                            filteredMessages[index].messageType == "receiver"
+                                ? CrossAxisAlignment.start
+                                : CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              color: Colors.green[800],
+                            ),
+                            padding: EdgeInsets.all(8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment
+                                  .end, // Align timestamp to bottom-right
+                              children: [
+                                Image.memory(
+                                  filteredMessages[index].imageData!,
+                                  width: 200,
+                                  height: 200,
+                                  fit: BoxFit.cover,
+                                ),
+                                if (filteredMessages[index].reaction != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 5.0),
+                                    child: Text(
+                                      filteredMessages[index].reaction!,
+                                      style: TextStyle(
+                                          fontSize: 20, color: Colors.white),
+                                    ),
+                                  ),
+                                SizedBox(height: 5),
+                                Text(
+                                  _formatTimestamp(
+                                      filteredMessages[index].timestamp),
+                                  style: textTheme.bodySmall?.copyWith(
+                                      fontSize: 10, color: Colors.white),
+                                ),
+                              ],
+                            ),
                           ),
-                          content: Text(
-                            "What would you like to do to this message?",
-                            style: textTheme.bodyMedium,
-                          ),
-                          actions: <Widget>[
-                            if (filteredMessages[index].messageType ==
-                                "sender") ...[
+                        ],
+                      ),
+                    ),
+                  );
+                } else {
+                  return GestureDetector(
+                    onLongPress: () {
+                      showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            title: Text(
+                              "Message Options",
+                              style: textTheme.titleLarge,
+                            ),
+                            content: Text(
+                              "What would you like to do to this message?",
+                              style: textTheme.bodyMedium,
+                            ),
+                            actions: <Widget>[
+                              if (filteredMessages[index].messageType ==
+                                  "sender") ...[
+                                TextButton(
+                                  child:
+                                      Text("Edit", style: textTheme.labelLarge),
+                                  onPressed: () {
+                                    editMessage(index);
+                                    Navigator.of(context).pop();
+                                  },
+                                ),
+                                TextButton(
+                                  child: Text("Delete",
+                                      style: textTheme.labelLarge),
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
+                                    deleteMessageForBoth(index);
+                                  },
+                                ),
+                              ],
+                              if (filteredMessages[index].messageType ==
+                                  "receiver")
+                                TextButton(
+                                  child: Text("React",
+                                      style: textTheme.labelLarge),
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (BuildContext context) {
+                                        return AlertDialog(
+                                          title: Text(
+                                            "Select a Reaction",
+                                            style: textTheme.titleLarge,
+                                          ),
+                                          content: Wrap(
+                                            spacing: 10,
+                                            children: [
+                                              IconButton(
+                                                icon: Text("👍"),
+                                                onPressed: () {
+                                                  reactToMessage(index, "👍");
+                                                  Navigator.of(context).pop();
+                                                },
+                                              ),
+                                              IconButton(
+                                                icon: Text("❤️"),
+                                                onPressed: () {
+                                                  reactToMessage(index, "❤️");
+                                                  Navigator.of(context).pop();
+                                                },
+                                              ),
+                                              IconButton(
+                                                icon: Text("😂"),
+                                                onPressed: () {
+                                                  reactToMessage(index, "😂");
+                                                  Navigator.of(context).pop();
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
                               TextButton(
                                 child:
-                                    Text("Edit", style: textTheme.labelLarge),
+                                    Text("Copy", style: textTheme.labelLarge),
                                 onPressed: () {
-                                  editMessage(index);
+                                  copyMessage(index);
                                   Navigator.of(context).pop();
                                 },
                               ),
                               TextButton(
                                 child:
-                                    Text("Delete", style: textTheme.labelLarge),
+                                    Text("Reply", style: textTheme.labelLarge),
+                                onPressed: () {
+                                  replyTo(index);
+                                  Navigator.of(context).pop();
+                                },
+                              ),
+                              TextButton(
+                                child: Text(
+                                  "Cancel",
+                                  style: textTheme.labelLarge
+                                      ?.copyWith(color: Colors.red),
+                                ),
                                 onPressed: () {
                                   Navigator.of(context).pop();
-                                  deleteMessageForBoth(index);
                                 },
                               ),
                             ],
-                            if (filteredMessages[index].messageType ==
-                                "receiver")
-                              TextButton(
-                                child:
-                                    Text("React", style: textTheme.labelLarge),
-                                onPressed: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (BuildContext context) {
-                                      return AlertDialog(
-                                        title: Text(
-                                          "Select a Reaction",
-                                          style: textTheme.titleLarge,
-                                        ),
-                                        content: Wrap(
-                                          spacing: 10,
-                                          children: [
-                                            IconButton(
-                                              icon: Text("👍"),
-                                              onPressed: () {
-                                                reactToMessage(index, "👍");
-                                                Navigator.of(context).pop();
-                                              },
-                                            ),
-                                            IconButton(
-                                              icon: Text("❤️"),
-                                              onPressed: () {
-                                                reactToMessage(index, "❤️");
-                                                Navigator.of(context).pop();
-                                              },
-                                            ),
-                                            IconButton(
-                                              icon: Text("😂"),
-                                              onPressed: () {
-                                                reactToMessage(index, "😂");
-                                                Navigator.of(context).pop();
-                                              },
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                            TextButton(
-                              child: Text("Copy", style: textTheme.labelLarge),
-                              onPressed: () {
-                                copyMessage(index);
-                                Navigator.of(context).pop();
-                              },
+                          );
+                        },
+                      );
+                    },
+                    child: Container(
+                      alignment: Alignment.bottomCenter,
+                      padding: EdgeInsets.only(
+                          left: 10, right: 14, top: 10, bottom: 10),
+                      child: Align(
+                        alignment:
+                            (filteredMessages[index].messageType == "receiver"
+                                ? Alignment.bottomLeft
+                                : Alignment.bottomRight),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width *
+                                0.75, // Set max width to 75% of screen width
+                          ),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              color: Colors.green[800],
                             ),
-                            TextButton(
-                              child: Text("Reply", style: textTheme.labelLarge),
-                              onPressed: () {
-                                replyTo(index);
-                                Navigator.of(context).pop();
-                              },
-                            ),
-                            TextButton(
-                              child: Text(
-                                "Cancel",
-                                style: textTheme.labelLarge
-                                    ?.copyWith(color: Colors.red),
-                              ),
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                              },
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                  child: Container(
-                    alignment: Alignment.bottomCenter,
-                    padding: EdgeInsets.only(
-                        left: 10, right: 14, top: 10, bottom: 10),
-                    child: Align(
-                      alignment:
-                          (filteredMessages[index].messageType == "receiver"
-                              ? Alignment.bottomLeft
-                              : Alignment.bottomRight),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          color: Colors.green[800],
-                        ),
-                        padding: EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (filteredMessages[index].replyTo != null)
-                              Container(
-                                padding: EdgeInsets.only(bottom: 5),
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    bottom:
-                                        BorderSide(color: theme.dividerColor),
+                            padding: EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (filteredMessages[index].replyTo != null)
+                                  Container(
+                                    padding: EdgeInsets.only(bottom: 5),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(
+                                            color: theme.dividerColor),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      "Reply to: " +
+                                          filteredMessages[index]
+                                              .replyTo!
+                                              .messageContent,
+                                      style: textTheme.bodySmall?.copyWith(
+                                          fontSize: 12, color: Colors.white),
+                                    ),
                                   ),
+                                RichText(
+                                  text: _buildMessageContent(
+                                      filteredMessages[index], searchTerm),
                                 ),
-                                child: Text(
-                                  "Reply to: " +
-                                      filteredMessages[index]
-                                          .replyTo!
-                                          .messageContent,
+                                if (filteredMessages[index].isEdited)
+                                  Text(
+                                    "(edited)",
+                                    style: textTheme.bodySmall?.copyWith(
+                                        fontSize: 6, color: Colors.white),
+                                  ),
+                                if (filteredMessages[index].reaction != null)
+                                  Text(
+                                    filteredMessages[index].reaction!,
+                                    style: TextStyle(fontSize: 20),
+                                  ),
+                                if (filteredMessages[index].autoDelete &&
+                                    filteredMessages[index].timeRemaining !=
+                                        null)
+                                  Text(
+                                    "Self-destructs in ${filteredMessages[index].timeRemaining} seconds",
+                                    style: textTheme.bodySmall?.copyWith(
+                                        fontSize: 10, color: theme.errorColor),
+                                  ),
+                                Text(
+                                  _formatTimestamp(
+                                      filteredMessages[index].timestamp),
                                   style: textTheme.bodySmall?.copyWith(
-                                      fontSize: 12, color: Colors.white),
+                                      fontSize: 6, color: Colors.white),
                                 ),
-                              ),
-                            RichText(
-                              text: _buildMessageContent(
-                                  filteredMessages[index], searchTerm),
+                              ],
                             ),
-                            if (filteredMessages[index].isEdited)
-                              Text("(edited)",
-                                  style: textTheme.bodySmall?.copyWith(
-                                      fontSize: 6, color: Colors.white)),
-                            if (filteredMessages[index].reaction != null)
-                              Text(filteredMessages[index].reaction!,
-                                  style: TextStyle(fontSize: 20)),
-                            if (filteredMessages[index].autoDelete &&
-                                filteredMessages[index].timeRemaining != null)
-                              Text(
-                                "Self-destructs in ${filteredMessages[index].timeRemaining} seconds",
-                                style: textTheme.bodySmall?.copyWith(
-                                    fontSize: 10, color: theme.errorColor),
-                              ),
-                            Text(
-                              _formatTimestamp(
-                                  filteredMessages[index].timestamp),
-                              style: textTheme.bodySmall
-                                  ?.copyWith(fontSize: 6, color: Colors.white),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                );
+                  );
+                }
               },
             ),
           ),
-          if (ticTacToeGame != null) buildTicTacToeBoard(),
           if (replyToMessage != null)
             Container(
               padding: EdgeInsets.all(10),
@@ -896,7 +1095,10 @@ class _Chat extends State<Chat> {
             color: theme.scaffoldBackgroundColor,
             child: Row(
               children: <Widget>[
-                SizedBox(width: 15),
+                IconButton(
+                  icon: Icon(Icons.image),
+                  onPressed: _pickImage,
+                ),
                 Expanded(
                   child: TextFormField(
                     validator: (value) {
@@ -920,9 +1122,10 @@ class _Chat extends State<Chat> {
                       border: InputBorder.none,
                     ),
                     controller: myController,
+                    minLines: 1,
+                    maxLines: 10,
                   ),
                 ),
-                SizedBox(width: 15),
                 GestureDetector(
                   onLongPress: () {
                     showDialog(
@@ -1004,8 +1207,8 @@ class _Chat extends State<Chat> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.grid_view),
-                  onPressed: startTicTacToe,
+                  icon: Icon(Icons.games),
+                  onPressed: _showGameMenu,
                 ),
               ],
             ),
@@ -1015,45 +1218,61 @@ class _Chat extends State<Chat> {
     );
   }
 
-  Widget buildTicTacToeBoard() {
-    return Column(
-      children: [
-        Text(
-          ticTacToeGame!.currentPlayer == currentDevicePlayer
-              ? "Your turn"
-              : "Opponent's turn",
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        GridView.builder(
-          shrinkWrap: true,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            childAspectRatio: 1.0,
+  void sendSystemMessage(String content) {
+    var obj = ChatMessage(
+      messageContent: content,
+      messageType: "system",
+      messageFormat: "system",
+      timestamp: DateTime.now().toUtc().add(Duration(hours: 8)),
+    );
+    addMessageToList(obj);
+  }
+
+  void _disconnectAndExit() {
+    widget.nearbyService.sendMessage(
+      widget.connected_device.deviceId,
+      "disconnect|partner_disconnected",
+    );
+
+    receivedDataSubscription.cancel();
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Home(name: widget.myData),
+      ),
+    );
+  }
+
+  void _showGameMenu() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Select a Game"),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                ListTile(
+                  title: Text("Tic Tac Toe"),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    startTicTacToe();
+                  },
+                ),
+              ],
+            ),
           ),
-          itemCount: 9,
-          itemBuilder: (context, index) {
-            return GestureDetector(
-              onTap: () => handleTicTacToeMove(index),
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.black),
-                ),
-                child: Center(
-                  child: Text(
-                    ticTacToeGame!.board[index],
-                    style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        SizedBox(height: 20),
-        ElevatedButton(
-          onPressed: _confirmEndGame,
-          child: Text("End Game"),
-        ),
-      ],
+          actions: <Widget>[
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1108,12 +1327,22 @@ class _Chat extends State<Chat> {
             TextButton(
               child: Text("Start"),
               onPressed: () {
+                sendSystemMessage("Played Tic Tac Toe");
                 Navigator.of(context).pop();
-                setState(() {
-                  ticTacToeGame = TicTacToeGame();
-                  currentDevicePlayer = "X";
-                  ticTacToeGame!.currentPlayer = "X";
-                });
+
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TicTacToePage(
+                      nearbyService: widget.nearbyService,
+                      connectedDevice: widget.connected_device,
+                      currentDevicePlayer: "X",
+                      myData: widget.myData,
+                      chat_state: messages.isNotEmpty ? messages : null,
+                    ),
+                  ),
+                );
+
                 widget.nearbyService.sendMessage(
                     widget.connected_device.deviceId, "tictactoe|start|O");
               },
@@ -1124,153 +1353,75 @@ class _Chat extends State<Chat> {
     );
   }
 
-  void handleTicTacToeMove(int index) {
-    if (ticTacToeGame != null &&
-        ticTacToeGame!.currentPlayer == currentDevicePlayer) {
-      if (ticTacToeGame!.board[index] == "") {
-        String player = ticTacToeGame!.currentPlayer;
-        if (ticTacToeGame!.makeMove(index)) {
-          setState(() {});
-          widget.nearbyService.sendMessage(
-            widget.connected_device.deviceId,
-            "tictactoe|move|$index|$player",
+  void _pickImage() async {
+    try {
+      final ImagePicker _picker = ImagePicker();
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+
+      if (image != null) {
+        Uint8List imageData = await image.readAsBytes();
+        int imageSize = imageData.lengthInBytes;
+
+        if (imageSize >= 20 * 1024) {
+          // Show dialog if the image is 20KB or larger
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: Text("Image Too Large"),
+                content: Text(
+                    "Your selected image is too large to send. Please choose an image smaller than 20KB."),
+                actions: <Widget>[
+                  TextButton(
+                    child: Text("OK"),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+              );
+            },
           );
-          if (!ticTacToeGame!.isGameOver) {
-            ticTacToeGame!.currentPlayer = player == "O" ? "X" : "O";
+        } else {
+          // Extract text from the image using OCR
+          final String ocrText;
+          try {
+            ocrText = await FlutterTesseractOcr.extractText(
+              image.path,
+              language:
+                  'eng', // Ensure you have the eng.traineddata in your assets
+            );
+            print("OCR Text Detected: $ocrText");
+          } catch (e) {
+            print("Error during OCR: $e");
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text("Failed to process the image for text")),
+            );
+            return;
           }
-          if (ticTacToeGame!.isGameOver) {
-            showGameOverDialog();
+
+          // Check if recognized text contains profanity
+          if (ocrText.isNotEmpty && filter.hasProfanity(ocrText)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content:
+                      Text("The image contains profanity and cannot be sent")),
+            );
+          } else {
+            // Send the image if no profanity is found
+            sendMessage("Image", imageData: imageData);
           }
         }
+      } else {
+        print("No image was selected.");
       }
-    }
-  }
-
-  void _confirmEndGame() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text("End Game"),
-          content: Text("Are you sure you want to end this game?"),
-          actions: <Widget>[
-            TextButton(
-              child: Text("Cancel"),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: Text("End Game"),
-              onPressed: () {
-                Navigator.of(context).pop();
-                _endGame();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _endGame() {
-    setState(() {
-      ticTacToeGame = null;
-    });
-    widget.nearbyService
-        .sendMessage(widget.connected_device.deviceId, "tictactoe|end");
-  }
-
-  void showGameOverDialog() {
-    String message;
-
-    if (ticTacToeGame!.winner == "Draw") {
-      message = "It's a Draw!";
-    } else if (ticTacToeGame!.winner == currentDevicePlayer) {
-      message = "You win!";
-    } else {
-      message = "You lose!";
-    }
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text("Game Over"),
-          content: Text(message),
-          actions: <Widget>[
-            TextButton(
-              child: Text("OK"),
-              onPressed: () {
-                Navigator.of(context).pop();
-                setState(() {
-                  ticTacToeGame = null;
-                });
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class TicTacToeGame {
-  List<String> board;
-  String currentPlayer;
-  bool isGameOver;
-  String? winner;
-
-  TicTacToeGame()
-      : board = List.generate(9, (_) => ""),
-        currentPlayer = "X",
-        isGameOver = false,
-        winner = null;
-
-  void resetGame() {
-    board = List.generate(9, (_) => "");
-    currentPlayer = "X";
-    isGameOver = false;
-    winner = null;
-  }
-
-  bool makeMove(int index) {
-    if (board[index] == "" && !isGameOver) {
-      board[index] = currentPlayer;
-      _checkGameStatus();
-      if (!isGameOver) {
-        currentPlayer = currentPlayer == "X" ? "O" : "X";
-      }
-      return true;
-    }
-    return false;
-  }
-
-  void _checkGameStatus() {
-    const winPatterns = [
-      [0, 1, 2],
-      [3, 4, 5],
-      [6, 7, 8],
-      [0, 3, 6],
-      [1, 4, 7],
-      [2, 5, 8],
-      [0, 4, 8],
-      [2, 4, 6],
-    ];
-
-    for (var pattern in winPatterns) {
-      if (board[pattern[0]] != "" &&
-          board[pattern[0]] == board[pattern[1]] &&
-          board[pattern[1]] == board[pattern[2]]) {
-        winner = board[pattern[0]];
-        isGameOver = true;
-        return;
-      }
-    }
-
-    if (!board.contains("")) {
-      isGameOver = true;
-      winner = "Draw";
+    } catch (e) {
+      print("Error picking image: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text("An error occurred while picking the image")),
+      );
     }
   }
 }

@@ -47,11 +47,11 @@ dependencies:
   profanity_filter: ^2.0.0
   image_picker: ^0.8.7
   url_launcher: ^6.3.0
-  flutter_sound: ^9.11.2
   permission_handler: ^11.3.1
   audioplayers: ^6.0.0
   video_player: ^2.9.1
   gallery_saver: ^2.3.2
+  flutter_tesseract_ocr: ^0.4.26
 
 dev_dependencies:
   flutter_test:
@@ -77,6 +77,8 @@ flutter:
   uses-material-design: true
   assets:
     - image/
+    - assets/tessdata_config.json
+    - assets/tessdata/
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

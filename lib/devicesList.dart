@@ -147,18 +147,13 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
                         child: InkWell(
                           onTap: () {
                             if (device.state == SessionState.connected) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("Connected"),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                              Navigator.push(
+                              Navigator.pushReplacement(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => Chat(
                                     connected_device: device,
                                     nearbyService: nearbyService,
+                                    myData: widget.mydata,
                                   ),
                                 ),
                               );
