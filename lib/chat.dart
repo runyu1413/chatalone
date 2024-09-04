@@ -14,12 +14,13 @@ import 'home.dart';
 import 'tictactoe.dart';
 import 'othello.dart';
 import 'connect_four.dart';
-import 'chat_history_manager.dart';
+import 'database_helper.dart';
+import 'package:uuid/uuid.dart';
 import 'package:ntu_fyp_chatalone/generated/l10n.dart';
 
 class ChatMessage {
   int? id;
-  String? chatId;
+  String chatId;
   String messageContent;
   String messageType;
   String messageFormat;
@@ -30,15 +31,17 @@ class ChatMessage {
   DateTime timestamp;
   ChatMessage? replyTo;
   Uint8List? imageData;
-  Timer? timer; // Timer for auto-delete messages, not stored in DB
+  Timer? timer;
+  String personName;
 
   ChatMessage({
     this.id,
-    this.chatId,
+    required this.chatId,
     required this.messageContent,
     required this.messageType,
     required this.messageFormat,
     required this.timestamp,
+    required this.personName,
     this.isEdited = false,
     this.reaction,
     this.autoDelete = false,
@@ -55,6 +58,7 @@ class ChatMessage {
       'messageContent': messageContent,
       'messageType': messageType,
       'messageFormat': messageFormat,
+      'personName': personName,
       'isEdited': isEdited ? 1 : 0,
       'reaction': reaction,
       'autoDelete': autoDelete ? 1 : 0,
@@ -73,6 +77,7 @@ class ChatMessage {
       messageType: map['messageType'],
       messageFormat: map['messageFormat'],
       timestamp: DateTime.parse(map['timestamp']),
+      personName: map['personName'],
       isEdited: map['isEdited'] == 1,
       reaction: map['reaction'],
       autoDelete: map['autoDelete'] == 1,
@@ -118,11 +123,15 @@ class _Chat extends State<Chat> {
   ChatMessage? replyToMessage;
   bool isTextSelected = false;
   String? currentDevicePlayer;
-  final ChatHistoryManager _chatHistoryManager = ChatHistoryManager();
+  late String chatId;
 
   @override
   void initState() {
     super.initState();
+    chatId = const Uuid().v4();
+    if (widget.chatState != null && widget.chatState!.isNotEmpty) {
+      chatId = widget.chatState!.first.chatId;
+    }
     messages = widget.chatState ?? [];
     filteredMessages = messages;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -141,11 +150,51 @@ class _Chat extends State<Chat> {
   }
 
   Future<void> _saveChatHistoryAndExit() async {
-    await _chatHistoryManager.saveChatHistory();
+    await _saveMessagesToDatabase();
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => Home(name: widget.myData)),
     );
+  }
+
+  Future<void> _saveChatHistoryAfterDisconnect() async {
+    await _saveMessagesToDatabase();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Disconnected"),
+          content: Text("Your partner has disconnected."),
+          actions: <Widget>[
+            TextButton(
+              child: Text(S.of(context).ok),
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => Home(name: widget.myData),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _saveMessagesToDatabase() async {
+    // Initialize the database helper
+    DatabaseHelper dbHelper = DatabaseHelper();
+
+    // Save each message to the database
+    for (var message in messages) {
+      // If the message has an ID, it's already in the database, so skip it
+      if (message.id == null) {
+        await dbHelper.insertMessage(message);
+      }
+    }
   }
 
   void addMessageToList(ChatMessage obj) {
@@ -153,7 +202,6 @@ class _Chat extends State<Chat> {
       messages.add(obj);
       filteredMessages = messages;
     });
-    _chatHistoryManager.addMessage(obj); // Add to in-memory storage
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
@@ -256,6 +304,8 @@ class _Chat extends State<Chat> {
     }
 
     var obj = ChatMessage(
+      chatId: chatId,
+      personName: widget.connectedDevice.deviceName,
       messageContent: content,
       messageType: "sender",
       messageFormat: message,
@@ -396,6 +446,8 @@ class _Chat extends State<Chat> {
         Uint8List? imageData;
         if (splited.length > 3 && splited[2] == "reply") {
           replyMessage = ChatMessage(
+            chatId: chatId,
+            personName: widget.connectedDevice.deviceName,
             messageContent: splited[3],
             messageType: "receiver",
             messageFormat: "message",
@@ -409,6 +461,8 @@ class _Chat extends State<Chat> {
           imageData = base64Decode(splited.last);
         }
         var obj = ChatMessage(
+          chatId: chatId,
+          personName: widget.connectedDevice.deviceName,
           messageContent: splited[1],
           messageType: "receiver",
           messageFormat: splited[0],
@@ -441,7 +495,7 @@ class _Chat extends State<Chat> {
             builder: (context) => ConnectFourPage(
               nearbyService: widget.nearbyService,
               connectedDevice: widget.connectedDevice,
-              currentDevicePlayer: splited[2], // "R" for Red or "Y" for Yellow
+              currentDevicePlayer: splited[2],
               myData: widget.myData,
               chatState: messages.isNotEmpty ? messages : null,
             ),
@@ -455,7 +509,7 @@ class _Chat extends State<Chat> {
             builder: (context) => OthelloPage(
               nearbyService: widget.nearbyService,
               connectedDevice: widget.connectedDevice,
-              currentDevicePlayer: splited[2], // "B" for Black or "W" for White
+              currentDevicePlayer: splited[2],
               myData: widget.myData,
               chatState: messages.isNotEmpty ? messages : null,
             ),
@@ -463,29 +517,7 @@ class _Chat extends State<Chat> {
         );
       } else if (splited[0] == "disconnect" &&
           splited[1] == "partner_disconnected") {
-        showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: Text(S.of(context).disconnectTitle),
-              content: Text(S.of(context).disconnectMessage),
-              actions: <Widget>[
-                TextButton(
-                  child: Text(S.of(context).ok),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => Home(name: widget.myData),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            );
-          },
-        );
+        _saveChatHistoryAfterDisconnect();
       }
     });
   }
@@ -1307,6 +1339,8 @@ class _Chat extends State<Chat> {
 
   void sendSystemMessage(String content) {
     var obj = ChatMessage(
+      chatId: chatId,
+      personName: widget.connectedDevice.deviceName,
       messageContent: content,
       messageType: "system",
       messageFormat: "system",
@@ -1475,13 +1509,12 @@ class _Chat extends State<Chat> {
                     builder: (context) => ConnectFourPage(
                       nearbyService: widget.nearbyService,
                       connectedDevice: widget.connectedDevice,
-                      currentDevicePlayer: "R", // Red starts and goes first
+                      currentDevicePlayer: "R",
                       myData: widget.myData,
                       chatState: messages.isNotEmpty ? messages : null,
                     ),
                   ),
                 );
-                // Notify the other device to be Yellow and go second
                 widget.nearbyService.sendMessage(
                     widget.connectedDevice.deviceId, "connectfour|start|Y");
               },
@@ -1509,7 +1542,6 @@ class _Chat extends State<Chat> {
             TextButton(
               child: Text(S.of(context).start),
               onPressed: () {
-                // The player who starts the game is Black
                 sendSystemMessage(S.of(context).playedOthello);
                 Navigator.of(context).pop();
                 Navigator.pushReplacement(
@@ -1518,13 +1550,12 @@ class _Chat extends State<Chat> {
                     builder: (context) => OthelloPage(
                       nearbyService: widget.nearbyService,
                       connectedDevice: widget.connectedDevice,
-                      currentDevicePlayer: "B", // Black starts first
+                      currentDevicePlayer: "B",
                       myData: widget.myData,
                       chatState: messages.isNotEmpty ? messages : null,
                     ),
                   ),
                 );
-                // Send a message to the connected device to start the game as White
                 widget.nearbyService.sendMessage(
                     widget.connectedDevice.deviceId, "othello|start|W");
               },
@@ -1542,8 +1573,6 @@ class _Chat extends State<Chat> {
       if (image != null) {
         Uint8List imageData = await image.readAsBytes();
         int imageSize = imageData.lengthInBytes;
-
-        // Check if image is too large
         if (imageSize >= 20 * 1024) {
           showDialog(
             context: context,
@@ -1563,7 +1592,6 @@ class _Chat extends State<Chat> {
             },
           );
         } else {
-          // Check for nudity using flutter_nude_detector
           final containsNudity =
               await FlutterNudeDetector.detect(path: image.path);
           if (containsNudity) {
@@ -1585,7 +1613,6 @@ class _Chat extends State<Chat> {
               },
             );
           } else {
-            // Continue with OCR processing if no nudity detected
             final inputImage = InputImage.fromFilePath(image.path);
             final textRecognizer = TextRecognizer();
             try {
