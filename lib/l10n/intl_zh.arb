@@ -1,20 +1,70 @@
 {
   "@@locale": "zh",
   "appTitle": "Chatalone",
-  "welcomeText": "欢迎, ",
+  "welcomeText": "欢迎，",
   "profileNameChange": "更改个人资料名称",
   "enterNewName": "输入新名称",
   "cancel": "取消",
   "confirm": "确认",
-  "findNearbyDevice": "查找附近设备",
-  "groupChat": "群聊",
+  "newChat": "新聊天",
+  "oldChat": "旧聊天",
   "settings": "设置",
+  "title": "标题",
+  "searchHint": "搜索...",
+  "messageOptionsTitle": "消息选项",
+  "disconnectTitle": "断开连接",
+  "disconnectMessage": "您确定要断开连接吗？",
+  "disconnect": "断开连接",
+  "sendImage": "发送图片",
+  "playGame": "玩游戏",
+  "edit": "编辑",
+  "delete": "删除",
+  "copy": "复制",
+  "reply": "回复",
+  "react": "反应",
+  "start": "开始",
+  "startTicTacToe": "开始井字棋",
+  "startConnectFour": "开始四连棋",
+  "startOthello": "开始黑白棋",
+  "imageTooLarge": "图片太大",
+  "imageTooLargeMessage": "所选图片太大，无法发送。请选择小于20KB的图片。",
+  "profanityDetected": "检测到不当言辞",
+  "profanityDetectedMessage": "图片包含不当言辞，无法发送。",
+  "ok": "好",
+  "enterMessage": "输入您的消息...",
+  "editMessage": "编辑您的消息...",
+  "pleaseEnterMessage": "请输入消息",
+  "messageContainsProfanity": "消息包含不当言辞",
+  "selfDestructsIn": "{time}秒后自毁",
+  "@selfDestructsIn": {
+    "description": "指示消息在多久后自毁的消息。",
+    "placeholders": {
+      "time": {
+        "type": "int",
+        "example": "10"
+      }
+    }
+  },
+  "playedTicTacToe": "玩过井字棋",
+  "playedConnectFour": "玩过四连棋",
+  "playedOthello": "玩过黑白棋",
+  "failedToProcessImage": "处理图片文本失败",
+  "imageNotSelected": "未选择图片。",
+  "errorPickingImage": "选择图片时出错：{error}",
+  "@errorPickingImage": {
+    "description": "选择图片失败时的错误消息。",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "没有权限访问图片。"
+      }
+    }
+  },
   "@welcomeText": {
-    "description": "欢迎用户的信息"
+    "description": "给用户的欢迎消息"
   },
   "@settings": {
     "description": "设置页面的标题"
   }
 }
-
   

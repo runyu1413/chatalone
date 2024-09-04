@@ -2,17 +2,68 @@
   "@@locale": "en",
   "appTitle": "Chatalone",
   "welcomeText": "Welcome, ",
-  "profileNameChange": "Profile Name Change",
+  "profileNameChange": "Change Profile Name",
   "enterNewName": "Enter New Name",
   "cancel": "Cancel",
   "confirm": "Confirm",
-  "findNearbyDevice": "Find Nearby Device",
-  "groupChat": "Group Chat",
-  "settings": "Settings", 
+  "newChat": "New Chat",
+  "oldChat": "Old Chat",
+  "settings": "Settings",
+  "title": "Title",
+  "searchHint": "Search...",
+  "messageOptionsTitle": "Message Options",
+  "disconnectTitle": "Disconnect",
+  "disconnectMessage": "Are you sure you want to disconnect?",
+  "disconnect": "Disconnect",
+  "sendImage": "Send Image",
+  "playGame": "Play Game",
+  "edit": "Edit",
+  "delete": "Delete",
+  "copy": "Copy",
+  "reply": "Reply",
+  "react": "React",
+  "start": "Start",
+  "startTicTacToe": "Start Tic Tac Toe",
+  "startConnectFour": "Start Connect Four",
+  "startOthello": "Start Othello",
+  "imageTooLarge": "Image Too Large",
+  "imageTooLargeMessage": "The selected image is too large to send. Please choose an image smaller than 20KB.",
+  "profanityDetected": "Profanity Detected",
+  "profanityDetectedMessage": "The image contains profanity and cannot be sent.",
+  "ok": "OK",
+  "enterMessage": "Enter your message...",
+  "editMessage": "Edit your message...",
+  "pleaseEnterMessage": "Please enter a message",
+  "messageContainsProfanity": "Message contains profanity",
+  "selfDestructsIn": "Self-destructs in {time} seconds",
+  "@selfDestructsIn": {
+    "description": "A message indicating how long until a message self-destructs.",
+    "placeholders": {
+      "time": {
+        "type": "int",
+        "example": "10"
+      }
+    }
+  },
+  "playedTicTacToe": "Played Tic Tac Toe",
+  "playedConnectFour": "Played Connect Four",
+  "playedOthello": "Played Othello",
+  "failedToProcessImage": "Failed to process the image for text",
+  "imageNotSelected": "No image was selected.",
+  "errorPickingImage": "Error picking image: {error}",
+  "@errorPickingImage": {
+    "description": "Error message when failing to pick an image.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "No permission to access images."
+      }
+    }
+  },
   "@welcomeText": {
     "description": "Welcome message for the user"
   },
   "@settings": {
-    "description": "The title for the settings page"  
+    "description": "Title for the settings page"
   }
 }

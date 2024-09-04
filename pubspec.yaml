@@ -52,6 +52,11 @@ dependencies:
   video_player: ^2.9.1
   gallery_saver: ^2.3.2
   flutter_tesseract_ocr: ^0.4.26
+  google_mlkit_text_recognition: ^0.10.0
+  sqflite: ^2.0.0+4
+  path: ^1.8.0
+  uuid: ^4.5.0
+  flutter_nude_detector: ^0.0.4+1
 
 dev_dependencies:
   flutter_test:
@@ -75,10 +80,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  generate: true
   assets:
     - image/
-    - assets/tessdata_config.json
-    - assets/tessdata/
+    - assets/ml_models/
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

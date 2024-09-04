@@ -2,19 +2,69 @@
   "@@locale": "ta",
   "appTitle": "Chatalone",
   "welcomeText": "வரவேற்கிறோம், ",
-  "profileNameChange": "சுயவிவர பெயர் மாற்றம்",
-  "enterNewName": "புதிய பெயரை உள்ளிடுக",
+  "profileNameChange": "சுயவிவர பெயரை மாற்றவும்",
+  "enterNewName": "புதிய பெயரை உள்ளிடவும்",
   "cancel": "ரத்து செய்",
-  "confirm": "உறுதி செய்",
-  "findNearbyDevice": "அருகிலுள்ள சாதனத்தை கண்டறி",
-  "groupChat": "குழு உரையாடல்",
+  "confirm": "உறுதிசெய்",
+  "newChat": "புதிய உரையாடல்",
+  "oldChat": "பழைய உரையாடல்",
   "settings": "அமைப்புகள்",
+  "title": "தலைப்பு",
+  "searchHint": "தேடு...",
+  "messageOptionsTitle": "செய்தி விருப்பங்கள்",
+  "disconnectTitle": "இணைப்பை துண்டி",
+  "disconnectMessage": "நீங்கள் இணைப்பை துண்டிக்க விரும்புகிறீர்களா?",
+  "disconnect": "துண்டி",
+  "sendImage": "படத்தை அனுப்பு",
+  "playGame": "விளையாட்டு விளையாடு",
+  "edit": "தொகு",
+  "delete": "அழி",
+  "copy": "நகல் எடு",
+  "reply": "பதிலளி",
+  "react": "மாற்றம் செய்",
+  "start": "ஆரம்பம்",
+  "startTicTacToe": "டிக் டாக் டோவை தொடங்கு",
+  "startConnectFour": "நான்கு இணைப்பை தொடங்கு",
+  "startOthello": "ஒதெல்லோவை தொடங்கு",
+  "imageTooLarge": "படம் மிகப்பெரியது",
+  "imageTooLargeMessage": "தேர்ந்தெடுக்கப்பட்ட படத்தை அனுப்ப முடியாது. 20KB க்கு குறைவான படத்தைத் தேர்ந்தெடுக்கவும்.",
+  "profanityDetected": "மோசமான சொற்கள் கண்டறியப்பட்டன",
+  "profanityDetectedMessage": "படத்தில் மோசமான சொற்கள் உள்ளதால் அனுப்ப முடியாது.",
+  "ok": "சரி",
+  "enterMessage": "உங்கள் செய்தியை உள்ளிடவும்...",
+  "editMessage": "உங்கள் செய்தியைத் திருத்தவும்...",
+  "pleaseEnterMessage": "தயவுசெய்து செய்தியை உள்ளிடவும்",
+  "messageContainsProfanity": "செய்தியில் மோசமான சொற்கள் உள்ளன",
+  "selfDestructsIn": "{time} விநாடிகளில் சுய அழிவடையும்",
+  "@selfDestructsIn": {
+    "description": "செய்தி எவ்வளவு நேரத்தில் சுய அழிவு அடையும் என்பதை கூறும் செய்தி.",
+    "placeholders": {
+      "time": {
+        "type": "int",
+        "example": "10"
+      }
+    }
+  },
+  "playedTicTacToe": "டிக் டாக் டோவை விளையாடினான்",
+  "playedConnectFour": "நான்கு இணைப்பை விளையாடினான்",
+  "playedOthello": "ஒதெல்லோவை விளையாடினான்",
+  "failedToProcessImage": "படத்திற்கான உரையை செயலாக்க முடியவில்லை",
+  "imageNotSelected": "படம் தேர்ந்தெடுக்கப்படவில்லை.",
+  "errorPickingImage": "படத்தைத் தேர்வு செய்வதில் பிழை: {error}",
+  "@errorPickingImage": {
+    "description": "படத்தைத் தேர்வு செய்ய முடியாத போது பிழை செய்தி.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "படங்களை அணுக அனுமதி இல்லை."
+      }
+    }
+  },
   "@welcomeText": {
-    "description": "பயனருக்கு வரவேற்கும் செய்தி"
+    "description": "பயனருக்கு வரவேற்பு செய்தி"
   },
   "@settings": {
-    "description": "அமைப்புகள் பக்கத்திற்கான தலைப்பு"
+    "description": "அமைப்புகள் பக்கத்தின் தலைப்பு"
   }
 }
-
   

@@ -151,7 +151,7 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => Chat(
-                                    connected_device: device,
+                                    connectedDevice: device,
                                     nearbyService: nearbyService,
                                     myData: widget.mydata,
                                   ),

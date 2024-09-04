@@ -70,10 +70,10 @@ class S {
     );
   }
 
-  /// `Profile Name Change`
+  /// `Change Profile Name`
   String get profileNameChange {
     return Intl.message(
-      'Profile Name Change',
+      'Change Profile Name',
       name: 'profileNameChange',
       desc: '',
       args: [],
@@ -110,21 +110,21 @@ class S {
     );
   }
 
-  /// `Find Nearby Device`
-  String get findNearbyDevice {
+  /// `New Chat`
+  String get newChat {
     return Intl.message(
-      'Find Nearby Device',
-      name: 'findNearbyDevice',
+      'New Chat',
+      name: 'newChat',
       desc: '',
       args: [],
     );
   }
 
-  /// `Group Chat`
-  String get groupChat {
+  /// `Old Chat`
+  String get oldChat {
     return Intl.message(
-      'Group Chat',
-      name: 'groupChat',
+      'Old Chat',
+      name: 'oldChat',
       desc: '',
       args: [],
     );
@@ -135,8 +135,338 @@ class S {
     return Intl.message(
       'Settings',
       name: 'settings',
-      desc: 'The title for the settings page',
+      desc: 'Title for the settings page',
       args: [],
+    );
+  }
+
+  /// `Title`
+  String get title {
+    return Intl.message(
+      'Title',
+      name: 'title',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Search...`
+  String get searchHint {
+    return Intl.message(
+      'Search...',
+      name: 'searchHint',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Message Options`
+  String get messageOptionsTitle {
+    return Intl.message(
+      'Message Options',
+      name: 'messageOptionsTitle',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Disconnect`
+  String get disconnectTitle {
+    return Intl.message(
+      'Disconnect',
+      name: 'disconnectTitle',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Are you sure you want to disconnect?`
+  String get disconnectMessage {
+    return Intl.message(
+      'Are you sure you want to disconnect?',
+      name: 'disconnectMessage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Disconnect`
+  String get disconnect {
+    return Intl.message(
+      'Disconnect',
+      name: 'disconnect',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Send Image`
+  String get sendImage {
+    return Intl.message(
+      'Send Image',
+      name: 'sendImage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Play Game`
+  String get playGame {
+    return Intl.message(
+      'Play Game',
+      name: 'playGame',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Edit`
+  String get edit {
+    return Intl.message(
+      'Edit',
+      name: 'edit',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Delete`
+  String get delete {
+    return Intl.message(
+      'Delete',
+      name: 'delete',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Copy`
+  String get copy {
+    return Intl.message(
+      'Copy',
+      name: 'copy',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Reply`
+  String get reply {
+    return Intl.message(
+      'Reply',
+      name: 'reply',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `React`
+  String get react {
+    return Intl.message(
+      'React',
+      name: 'react',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Start`
+  String get start {
+    return Intl.message(
+      'Start',
+      name: 'start',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Start Tic Tac Toe`
+  String get startTicTacToe {
+    return Intl.message(
+      'Start Tic Tac Toe',
+      name: 'startTicTacToe',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Start Connect Four`
+  String get startConnectFour {
+    return Intl.message(
+      'Start Connect Four',
+      name: 'startConnectFour',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Start Othello`
+  String get startOthello {
+    return Intl.message(
+      'Start Othello',
+      name: 'startOthello',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Image Too Large`
+  String get imageTooLarge {
+    return Intl.message(
+      'Image Too Large',
+      name: 'imageTooLarge',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The selected image is too large to send. Please choose an image smaller than 20KB.`
+  String get imageTooLargeMessage {
+    return Intl.message(
+      'The selected image is too large to send. Please choose an image smaller than 20KB.',
+      name: 'imageTooLargeMessage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Profanity Detected`
+  String get profanityDetected {
+    return Intl.message(
+      'Profanity Detected',
+      name: 'profanityDetected',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `The image contains profanity and cannot be sent.`
+  String get profanityDetectedMessage {
+    return Intl.message(
+      'The image contains profanity and cannot be sent.',
+      name: 'profanityDetectedMessage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `OK`
+  String get ok {
+    return Intl.message(
+      'OK',
+      name: 'ok',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Enter your message...`
+  String get enterMessage {
+    return Intl.message(
+      'Enter your message...',
+      name: 'enterMessage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Edit your message...`
+  String get editMessage {
+    return Intl.message(
+      'Edit your message...',
+      name: 'editMessage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Please enter a message`
+  String get pleaseEnterMessage {
+    return Intl.message(
+      'Please enter a message',
+      name: 'pleaseEnterMessage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Message contains profanity`
+  String get messageContainsProfanity {
+    return Intl.message(
+      'Message contains profanity',
+      name: 'messageContainsProfanity',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Self-destructs in {time} seconds`
+  String selfDestructsIn(int time) {
+    return Intl.message(
+      'Self-destructs in $time seconds',
+      name: 'selfDestructsIn',
+      desc: 'A message indicating how long until a message self-destructs.',
+      args: [time],
+    );
+  }
+
+  /// `Played Tic Tac Toe`
+  String get playedTicTacToe {
+    return Intl.message(
+      'Played Tic Tac Toe',
+      name: 'playedTicTacToe',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Played Connect Four`
+  String get playedConnectFour {
+    return Intl.message(
+      'Played Connect Four',
+      name: 'playedConnectFour',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Played Othello`
+  String get playedOthello {
+    return Intl.message(
+      'Played Othello',
+      name: 'playedOthello',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Failed to process the image for text`
+  String get failedToProcessImage {
+    return Intl.message(
+      'Failed to process the image for text',
+      name: 'failedToProcessImage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `No image was selected.`
+  String get imageNotSelected {
+    return Intl.message(
+      'No image was selected.',
+      name: 'imageNotSelected',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Error picking image: {error}`
+  String errorPickingImage(String error) {
+    return Intl.message(
+      'Error picking image: $error',
+      name: 'errorPickingImage',
+      desc: 'Error message when failing to pick an image.',
+      args: [error],
     );
   }
 }

@@ -9,6 +9,8 @@ import 'devicesList.dart';
 import 'generated/l10n.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:ntu_fyp_chatalone/settings.dart'; // Adjust the path based on your project structure
+import 'chat_history.dart'; // Import the ChatHistoryPage
+import 'chat_sessions_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,6 +66,7 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       _locale = locale;
     });
+    _saveLanguagePreference(locale.languageCode);
   }
 
   void setTheme(ThemeMode themeMode) {
@@ -71,6 +74,11 @@ class _MyAppState extends State<MyApp> {
       _themeMode = themeMode;
     });
     _saveThemePreference(themeMode);
+  }
+
+  void _saveLanguagePreference(String languageCode) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString('language_code', languageCode);
   }
 
   void _saveThemePreference(ThemeMode themeMode) async {
@@ -101,17 +109,17 @@ class _MyAppState extends State<MyApp> {
       themeMode: _themeMode,
       theme: ThemeData.light(),
       darkTheme: ThemeData.dark(),
-      localizationsDelegates: [
+      localizationsDelegates: const [
         S.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: [
-        const Locale('en'), // English
-        const Locale('ms'), // Malay
-        const Locale('zh'), // Simplified Chinese
-        const Locale('ta'), // Tamil
+      supportedLocales: const [
+        Locale('en'), // English
+        Locale('ms'), // Malay
+        Locale('zh'), // Simplified Chinese
+        Locale('ta'), // Tamil
       ],
       onGenerateRoute: (settings) {
         switch (settings.name) {
@@ -121,7 +129,7 @@ class _MyAppState extends State<MyApp> {
                 future: getUsername(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Scaffold(
+                    return const Scaffold(
                       body: Center(child: CircularProgressIndicator()),
                     );
                   } else if (snapshot.hasData &&
@@ -152,6 +160,15 @@ class _MyAppState extends State<MyApp> {
             );
           case 'settings':
             return MaterialPageRoute(builder: (context) => SettingsPage());
+          case 'chatSessions': // Add this case for Chat Sessions
+            return MaterialPageRoute(
+              builder: (context) => ChatSessionsPage(),
+            );
+          case 'chatHistory': // Add this case for Chat History
+            final chatId = settings.arguments as String;
+            return MaterialPageRoute(
+              builder: (context) => ChatHistoryPage(chatId: chatId),
+            );
           default:
             return MaterialPageRoute(
               builder: (_) => Scaffold(

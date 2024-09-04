@@ -7,21 +7,21 @@ class TicTacToePage extends StatefulWidget {
   final Device connectedDevice;
   final String currentDevicePlayer;
   final String myData;
-  final List<ChatMessage>? chat_state;
+  final List<ChatMessage>? chatState;
 
-  TicTacToePage({
+  const TicTacToePage({
     required this.nearbyService,
     required this.connectedDevice,
     required this.currentDevicePlayer,
     required this.myData,
-    this.chat_state,
+    this.chatState,
   });
 
   @override
-  _TicTacToePageState createState() => _TicTacToePageState();
+  TicTacToePageState createState() => TicTacToePageState();
 }
 
-class _TicTacToePageState extends State<TicTacToePage> {
+class TicTacToePageState extends State<TicTacToePage> {
   TicTacToeGame? ticTacToeGame;
 
   @override
@@ -59,18 +59,18 @@ class _TicTacToePageState extends State<TicTacToePage> {
             MaterialPageRoute(
               builder: (context) => Chat(
                 nearbyService: widget.nearbyService,
-                connected_device: widget.connectedDevice,
+                connectedDevice: widget.connectedDevice,
                 myData: widget.myData,
-                chat_state: widget.chat_state,
+                chatState: widget.chatState,
               ),
             ),
           ).then((_) {
             // Ensure scroll to bottom after returning to chat
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              ScrollController _scrollController = ScrollController();
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: Duration(milliseconds: 300),
+              ScrollController scrollController = ScrollController();
+              scrollController.animateTo(
+                scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOut,
               );
             });
@@ -145,18 +145,18 @@ class _TicTacToePageState extends State<TicTacToePage> {
       MaterialPageRoute(
         builder: (context) => Chat(
           nearbyService: widget.nearbyService,
-          connected_device: widget.connectedDevice,
+          connectedDevice: widget.connectedDevice,
           myData: widget.myData,
-          chat_state: widget.chat_state,
+          chatState: widget.chatState,
         ),
       ),
     ).then((_) {
       // Ensure scroll to bottom after returning to chat
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScrollController _scrollController = ScrollController();
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: Duration(milliseconds: 300),
+        ScrollController scrollController = ScrollController();
+        scrollController.animateTo(
+          scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       });
@@ -191,27 +191,6 @@ class _TicTacToePageState extends State<TicTacToePage> {
               child: Text("OK"),
               onPressed: () {
                 Navigator.of(context).pop(); // Close the dialog
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => Chat(
-                      nearbyService: widget.nearbyService,
-                      connected_device: widget.connectedDevice,
-                      myData: widget.myData,
-                      chat_state: widget.chat_state,
-                    ),
-                  ),
-                ).then((_) {
-                  // Ensure scroll to bottom after returning to chat
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    ScrollController _scrollController = ScrollController();
-                    _scrollController.animateTo(
-                      _scrollController.position.maxScrollExtent,
-                      duration: Duration(milliseconds: 300),
-                      curve: Curves.easeOut,
-                    );
-                  });
-                });
               },
             ),
           ],
@@ -237,11 +216,12 @@ class _TicTacToePageState extends State<TicTacToePage> {
                   ticTacToeGame!.currentPlayer == widget.currentDevicePlayer
                       ? "Your turn"
                       : "Opponent's turn",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 GridView.builder(
                   shrinkWrap: true,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     childAspectRatio: 1.0,
                   ),
@@ -276,7 +256,7 @@ class _TicTacToePageState extends State<TicTacToePage> {
                     );
                   },
                 ),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: _confirmEndGame,
                   child: Text("End Game"),

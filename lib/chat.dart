@@ -1,20 +1,25 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
 import 'package:profanity_filter/profanity_filter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/gestures.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_tesseract_ocr/flutter_tesseract_ocr.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:flutter_nude_detector/flutter_nude_detector.dart';
 import 'home.dart';
 import 'tictactoe.dart';
+import 'othello.dart';
+import 'connect_four.dart';
+import 'chat_history_manager.dart';
+import 'package:ntu_fyp_chatalone/generated/l10n.dart';
 
 class ChatMessage {
+  int? id;
+  String? chatId;
   String messageContent;
   String messageType;
   String messageFormat;
@@ -22,12 +27,14 @@ class ChatMessage {
   String? reaction;
   bool autoDelete;
   int? timeRemaining;
-  Timer? timer;
   DateTime timestamp;
   ChatMessage? replyTo;
   Uint8List? imageData;
+  Timer? timer; // Timer for auto-delete messages, not stored in DB
 
   ChatMessage({
+    this.id,
+    this.chatId,
     required this.messageContent,
     required this.messageType,
     required this.messageFormat,
@@ -36,23 +43,59 @@ class ChatMessage {
     this.reaction,
     this.autoDelete = false,
     this.timeRemaining,
-    this.timer,
     this.replyTo,
     this.imageData,
+    this.timer,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'chatId': chatId,
+      'messageContent': messageContent,
+      'messageType': messageType,
+      'messageFormat': messageFormat,
+      'isEdited': isEdited ? 1 : 0,
+      'reaction': reaction,
+      'autoDelete': autoDelete ? 1 : 0,
+      'timeRemaining': timeRemaining,
+      'timestamp': timestamp.toIso8601String(),
+      'replyTo': replyTo?.toMap(),
+      'imageData': imageData,
+    };
+  }
+
+  static ChatMessage fromMap(Map<String, dynamic> map) {
+    return ChatMessage(
+      id: map['id'],
+      chatId: map['chatId'],
+      messageContent: map['messageContent'],
+      messageType: map['messageType'],
+      messageFormat: map['messageFormat'],
+      timestamp: DateTime.parse(map['timestamp']),
+      isEdited: map['isEdited'] == 1,
+      reaction: map['reaction'],
+      autoDelete: map['autoDelete'] == 1,
+      timeRemaining: map['timeRemaining'],
+      replyTo: map['replyTo'] != null
+          ? ChatMessage.fromMap(jsonDecode(map['replyTo']))
+          : null,
+      imageData: map['imageData'],
+    );
+  }
 }
 
 class Chat extends StatefulWidget {
-  Device connected_device;
-  NearbyService nearbyService;
-  List<ChatMessage>? chat_state;
+  final Device connectedDevice;
+  final NearbyService nearbyService;
+  final List<ChatMessage>? chatState;
   final String myData;
 
-  Chat({
-    required this.connected_device,
+  const Chat({
+    required this.connectedDevice,
     required this.nearbyService,
     required this.myData,
-    this.chat_state,
+    this.chatState,
   });
 
   @override
@@ -67,21 +110,20 @@ class _Chat extends State<Chat> {
   List<ChatMessage> filteredMessages = [];
   List<int> searchResults = [];
   int currentSearchIndex = 0;
-
   String searchTerm = '';
   bool isSearching = false;
-
   final myController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   int? editingIndex;
   ChatMessage? replyToMessage;
   bool isTextSelected = false;
   String? currentDevicePlayer;
+  final ChatHistoryManager _chatHistoryManager = ChatHistoryManager();
 
   @override
   void initState() {
     super.initState();
-    messages = widget.chat_state ?? [];
+    messages = widget.chatState ?? [];
     filteredMessages = messages;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
@@ -92,10 +134,18 @@ class _Chat extends State<Chat> {
 
   @override
   void dispose() {
-    super.dispose();
     receivedDataSubscription.cancel();
     myController.removeListener(_handleTextSelection);
     _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveChatHistoryAndExit() async {
+    await _chatHistoryManager.saveChatHistory();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => Home(name: widget.myData)),
+    );
   }
 
   void addMessageToList(ChatMessage obj) {
@@ -103,24 +153,25 @@ class _Chat extends State<Chat> {
       messages.add(obj);
       filteredMessages = messages;
     });
+    _chatHistoryManager.addMessage(obj); // Add to in-memory storage
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
     });
 
     if (obj.autoDelete) {
-      obj.timer = Timer.periodic(Duration(seconds: 1), (timer) {
+      obj.timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         setState(() {
           obj.timeRemaining = (obj.timeRemaining ?? 10) - 1;
         });
-
         if (obj.timeRemaining! <= 0) {
           timer.cancel();
           setState(() {
             messages.remove(obj);
             filteredMessages = messages;
           });
-          this.widget.nearbyService.sendMessage(
-              this.widget.connected_device.deviceId, "delete|auto");
+          widget.nearbyService
+              .sendMessage(widget.connectedDevice.deviceId, "delete|auto");
         }
       });
     }
@@ -131,10 +182,8 @@ class _Chat extends State<Chat> {
       messages.removeAt(index);
       filteredMessages = messages;
     });
-    this
-        .widget
-        .nearbyService
-        .sendMessage(this.widget.connected_device.deviceId, "delete|$index");
+    widget.nearbyService
+        .sendMessage(widget.connectedDevice.deviceId, "delete|$index");
   }
 
   void deleteMessageForBoth(int index) {
@@ -142,18 +191,17 @@ class _Chat extends State<Chat> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text("Delete Message"),
-          content: Text(
-              "Are you sure you want to delete this message? This action cannot be undone."),
+          title: Text(S.of(context).delete),
+          content: Text("Are you sure you want to delete this message?"),
           actions: <Widget>[
             TextButton(
-              child: Text("Cancel"),
+              child: Text(S.of(context).cancel),
               onPressed: () {
                 Navigator.of(context).pop();
               },
             ),
             TextButton(
-              child: Text("Delete"),
+              child: Text(S.of(context).delete),
               onPressed: () {
                 Navigator.of(context).pop();
                 deleteMessage(index);
@@ -179,8 +227,8 @@ class _Chat extends State<Chat> {
         messages[editingIndex!].isEdited = true;
         filteredMessages = messages;
       });
-      this.widget.nearbyService.sendMessage(
-          this.widget.connected_device.deviceId, "edit|$editingIndex|$newText");
+      widget.nearbyService.sendMessage(
+          widget.connectedDevice.deviceId, "edit|$editingIndex|$newText");
       editingIndex = null;
       myController.clear();
     }
@@ -203,13 +251,8 @@ class _Chat extends State<Chat> {
         (autoDelete ? "|auto|$timeInSeconds" : "");
 
     if (imageData != null) {
-      String base64Image =
-          base64Encode(imageData); // Convert image data to base64
-      finalMessage +=
-          "|$base64Image"; // Append the encoded image to the message
-      print("Sending Image: $finalMessage"); // Debug print
-    } else {
-      print("Sending Message: $finalMessage"); // Debug print
+      String base64Image = base64Encode(imageData);
+      finalMessage += "|$base64Image";
     }
 
     var obj = ChatMessage(
@@ -218,16 +261,14 @@ class _Chat extends State<Chat> {
       messageFormat: message,
       autoDelete: autoDelete,
       timeRemaining: autoDelete ? timeInSeconds ?? 10 : null,
-      timestamp: DateTime.now().toUtc().add(Duration(hours: 8)),
+      timestamp: DateTime.now().toUtc().add(const Duration(hours: 8)),
       replyTo: replyToMessage,
       imageData: imageData,
     );
 
     addMessageToList(obj);
-    this
-        .widget
-        .nearbyService
-        .sendMessage(this.widget.connected_device.deviceId, finalMessage);
+    widget.nearbyService
+        .sendMessage(widget.connectedDevice.deviceId, finalMessage);
 
     myController.clear();
     setState(() {
@@ -244,10 +285,10 @@ class _Chat extends State<Chat> {
       }
       filteredMessages = messages;
     });
-    this.widget.nearbyService.sendMessage(
-          this.widget.connected_device.deviceId,
-          "react|$index|${messages[index].reaction ?? ''}",
-        );
+    widget.nearbyService.sendMessage(
+      widget.connectedDevice.deviceId,
+      "react|$index|${messages[index].reaction ?? ''}",
+    );
   }
 
   void copyMessage(int index) {
@@ -261,21 +302,21 @@ class _Chat extends State<Chat> {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
-        duration: Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     }
   }
 
   void _scrollToMessage(int index) {
-    final double itemHeight = 100.0;
+    const double itemHeight = 100.0;
     final double screenHeight = MediaQuery.of(context).size.height;
     final double offset =
         (index * itemHeight) - (screenHeight / 2) + (itemHeight / 2);
 
     _scrollController.animateTo(
       offset < 0 ? 0 : offset,
-      duration: Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
   }
@@ -325,10 +366,9 @@ class _Chat extends State<Chat> {
     }
   }
 
-  @override
   void init() {
     receivedDataSubscription =
-        this.widget.nearbyService.dataReceivedSubscription(callback: (data) {
+        widget.nearbyService.dataReceivedSubscription(callback: (data) {
       final splited = data["message"].split('|');
       if (splited[0] == "delete") {
         int indexToDelete = int.parse(splited[1]);
@@ -354,24 +394,20 @@ class _Chat extends State<Chat> {
         var replyMessage;
         int? autoDeleteTime;
         Uint8List? imageData;
-
         if (splited.length > 3 && splited[2] == "reply") {
           replyMessage = ChatMessage(
             messageContent: splited[3],
             messageType: "receiver",
             messageFormat: "message",
-            timestamp: DateTime.now().toUtc().add(Duration(hours: 8)),
+            timestamp: DateTime.now().toUtc().add(const Duration(hours: 8)),
           );
           autoDeleteTime = int.tryParse(splited[4]);
         } else if (splited.contains("auto")) {
           autoDeleteTime = int.tryParse(splited.last);
         }
-
         if (splited[0] == "image" && splited.length > 2) {
-          imageData = base64Decode(
-              splited.last); // Decode the base64 string back to Uint8List
+          imageData = base64Decode(splited.last);
         }
-
         var obj = ChatMessage(
           messageContent: splited[1],
           messageType: "receiver",
@@ -379,22 +415,49 @@ class _Chat extends State<Chat> {
           autoDelete: autoDeleteTime != null,
           timeRemaining: autoDeleteTime ?? 10,
           replyTo: replyMessage,
-          timestamp: DateTime.now().toUtc().add(Duration(hours: 8)),
+          timestamp: DateTime.now().toUtc().add(const Duration(hours: 8)),
           imageData: imageData,
         );
-
         addMessageToList(obj);
       } else if (splited[0] == "tictactoe" && splited[1] == "start") {
-        sendSystemMessage("Played Tic Tac Toe");
+        sendSystemMessage(S.of(context).playedTicTacToe);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) => TicTacToePage(
               nearbyService: widget.nearbyService,
-              connectedDevice: widget.connected_device,
+              connectedDevice: widget.connectedDevice,
               currentDevicePlayer: "O",
-              chat_state: messages,
+              chatState: messages,
               myData: widget.myData,
+            ),
+          ),
+        );
+      } else if (splited[0] == "connectfour" && splited[1] == "start") {
+        sendSystemMessage(S.of(context).playedConnectFour);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ConnectFourPage(
+              nearbyService: widget.nearbyService,
+              connectedDevice: widget.connectedDevice,
+              currentDevicePlayer: splited[2], // "R" for Red or "Y" for Yellow
+              myData: widget.myData,
+              chatState: messages.isNotEmpty ? messages : null,
+            ),
+          ),
+        );
+      } else if (splited[0] == "othello" && splited[1] == "start") {
+        sendSystemMessage(S.of(context).playedOthello);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OthelloPage(
+              nearbyService: widget.nearbyService,
+              connectedDevice: widget.connectedDevice,
+              currentDevicePlayer: splited[2], // "B" for Black or "W" for White
+              myData: widget.myData,
+              chatState: messages.isNotEmpty ? messages : null,
             ),
           ),
         );
@@ -404,12 +467,11 @@ class _Chat extends State<Chat> {
           context: context,
           builder: (BuildContext context) {
             return AlertDialog(
-              title: Text("Disconnected"),
-              content: Text(
-                  "Your partner has disconnected. You will be returned to the home screen."),
+              title: Text(S.of(context).disconnectTitle),
+              content: Text(S.of(context).disconnectMessage),
               actions: <Widget>[
                 TextButton(
-                  child: Text("OK"),
+                  child: Text(S.of(context).ok),
                   onPressed: () {
                     Navigator.of(context).pop();
                     Navigator.pushReplacement(
@@ -436,9 +498,7 @@ class _Chat extends State<Chat> {
   }
 
   TextSpan _buildMessageContent(ChatMessage message, String? searchTerm) {
-    final theme = Theme.of(context);
     final String text = message.messageContent;
-
     final RegExp pattern = RegExp(
       r'\*\*(.*?)\*\*|'
       r'_(.*?)_|'
@@ -448,27 +508,22 @@ class _Chat extends State<Chat> {
       r"((https?:\/\/)?[a-zA-Z0-9\-\._~:\/\?#\[\]@!\$&\'\(\)\*\+,;=]+\.[a-zA-Z0-9\-\._~:\/\?#\[\]@!\$&\'\(\)\*\+,;=]+)",
       caseSensitive: false,
     );
-
     final List<TextSpan> spans = [];
     int lastMatchEnd = 0;
-
     for (final Match match in pattern.allMatches(text)) {
       if (match.start > lastMatchEnd) {
         spans.add(TextSpan(
           text: text.substring(lastMatchEnd, match.start),
-          style: TextStyle(color: Colors.white),
+          style: const TextStyle(color: Colors.white),
         ));
       }
-
-      TextStyle highlightStyle = TextStyle(color: Colors.white);
-
+      TextStyle highlightStyle = const TextStyle(color: Colors.white);
       if (searchTerm != null && searchTerm.isNotEmpty) {
-        highlightStyle = TextStyle(
+        highlightStyle = const TextStyle(
           color: Colors.yellow,
           fontSize: 16,
         );
       }
-
       if (match.group(1) != null) {
         spans.add(TextSpan(
           text: match.group(1),
@@ -532,7 +587,7 @@ class _Chat extends State<Chat> {
       } else if (match.group(5) != null) {
         spans.add(TextSpan(
           text: match.group(5),
-          style: TextStyle(
+          style: const TextStyle(
             backgroundColor: Colors.yellow,
             color: Colors.white,
             fontSize: 16,
@@ -542,7 +597,7 @@ class _Chat extends State<Chat> {
         final String url = match.group(6)!;
         spans.add(TextSpan(
           text: url,
-          style: TextStyle(
+          style: const TextStyle(
             color: Colors.blue,
             decoration: TextDecoration.underline,
             fontSize: 16,
@@ -555,10 +610,8 @@ class _Chat extends State<Chat> {
             },
         ));
       }
-
       lastMatchEnd = match.end;
     }
-
     if (lastMatchEnd < text.length) {
       spans.add(TextSpan(
         text: text.substring(lastMatchEnd),
@@ -574,7 +627,6 @@ class _Chat extends State<Chat> {
         ),
       ));
     }
-
     return TextSpan(children: spans);
   }
 
@@ -587,7 +639,6 @@ class _Chat extends State<Chat> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
@@ -595,10 +646,10 @@ class _Chat extends State<Chat> {
         backgroundColor: theme.appBarTheme.backgroundColor,
         flexibleSpace: SafeArea(
           child: Container(
-            padding: EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.only(right: 10),
             child: Row(
               children: <Widget>[
-                SizedBox(width: 20),
+                const SizedBox(width: 20),
                 Expanded(
                   child: isSearching
                       ? TextField(
@@ -607,7 +658,7 @@ class _Chat extends State<Chat> {
                             _searchMessages(value);
                           },
                           decoration: InputDecoration(
-                            hintText: "Search...",
+                            hintText: S.of(context).searchHint,
                             border: InputBorder.none,
                           ),
                         )
@@ -616,7 +667,7 @@ class _Chat extends State<Chat> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
                             Text(
-                              this.widget.connected_device.deviceName,
+                              widget.connectedDevice.deviceName,
                               style: textTheme.titleLarge?.copyWith(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w500,
@@ -646,33 +697,33 @@ class _Chat extends State<Chat> {
                   Row(
                     children: [
                       IconButton(
-                        icon: Icon(Icons.arrow_upward),
+                        icon: const Icon(Icons.arrow_upward),
                         onPressed: _previousSearchResult,
                       ),
                       IconButton(
-                        icon: Icon(Icons.arrow_downward),
+                        icon: const Icon(Icons.arrow_downward),
                         onPressed: _nextSearchResult,
                       ),
                     ],
                   ),
                 IconButton(
-                  icon: Icon(Icons.exit_to_app, color: Colors.red),
+                  icon: const Icon(Icons.exit_to_app, color: Colors.red),
                   onPressed: () {
                     showDialog(
                       context: context,
                       builder: (BuildContext context) {
                         return AlertDialog(
-                          title: Text("Disconnect"),
-                          content: Text("Are you sure you want to disconnect?"),
+                          title: Text(S.of(context).disconnectTitle),
+                          content: Text(S.of(context).disconnectMessage),
                           actions: <Widget>[
                             TextButton(
-                              child: Text("Cancel"),
+                              child: Text(S.of(context).cancel),
                               onPressed: () {
                                 Navigator.of(context).pop();
                               },
                             ),
                             TextButton(
-                              child: Text("Disconnect"),
+                              child: Text(S.of(context).disconnect),
                               onPressed: () {
                                 Navigator.of(context).pop();
                                 _disconnectAndExit();
@@ -695,36 +746,36 @@ class _Chat extends State<Chat> {
             visible: isTextSelected,
             child: Container(
               color: theme.scaffoldBackgroundColor,
-              padding: EdgeInsets.symmetric(horizontal: 8.0),
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   IconButton(
-                    icon: Icon(Icons.format_bold),
+                    icon: const Icon(Icons.format_bold),
                     onPressed: isTextSelected
                         ? () => _formatSelectedText('bold')
                         : null,
                   ),
                   IconButton(
-                    icon: Icon(Icons.format_italic),
+                    icon: const Icon(Icons.format_italic),
                     onPressed: isTextSelected
                         ? () => _formatSelectedText('italic')
                         : null,
                   ),
                   IconButton(
-                    icon: Icon(Icons.format_underline),
+                    icon: const Icon(Icons.format_underline),
                     onPressed: isTextSelected
                         ? () => _formatSelectedText('underline')
                         : null,
                   ),
                   IconButton(
-                    icon: Icon(Icons.format_strikethrough),
+                    icon: const Icon(Icons.format_strikethrough),
                     onPressed: isTextSelected
                         ? () => _formatSelectedText('strikethrough')
                         : null,
                   ),
                   IconButton(
-                    icon: Icon(Icons.highlight),
+                    icon: const Icon(Icons.highlight),
                     onPressed: isTextSelected
                         ? () => _formatSelectedText('highlight')
                         : null,
@@ -737,12 +788,12 @@ class _Chat extends State<Chat> {
             child: ListView.builder(
               controller: _scrollController,
               itemCount: filteredMessages.length,
-              padding: EdgeInsets.only(top: 10, bottom: 10),
+              padding: const EdgeInsets.only(top: 10, bottom: 10),
               itemBuilder: (context, index) {
                 if (filteredMessages[index].messageType == 'system') {
                   return Container(
                     alignment: Alignment.center,
-                    padding: EdgeInsets.only(
+                    padding: const EdgeInsets.only(
                         left: 10, right: 10, top: 10, bottom: 10),
                     child: Text(
                       filteredMessages[index].messageContent,
@@ -770,21 +821,21 @@ class _Chat extends State<Chat> {
                                 spacing: 10,
                                 children: [
                                   IconButton(
-                                    icon: Text("👍"),
+                                    icon: const Text("👍"),
                                     onPressed: () {
                                       reactToMessage(index, "👍");
                                       Navigator.of(context).pop();
                                     },
                                   ),
                                   IconButton(
-                                    icon: Text("❤️"),
+                                    icon: const Text("❤️"),
                                     onPressed: () {
                                       reactToMessage(index, "❤️");
                                       Navigator.of(context).pop();
                                     },
                                   ),
                                   IconButton(
-                                    icon: Text("😂"),
+                                    icon: const Text("😂"),
                                     onPressed: () {
                                       reactToMessage(index, "😂");
                                       Navigator.of(context).pop();
@@ -802,7 +853,7 @@ class _Chat extends State<Chat> {
                           filteredMessages[index].messageType == "receiver"
                               ? Alignment.centerLeft
                               : Alignment.centerRight,
-                      padding: EdgeInsets.only(
+                      padding: const EdgeInsets.only(
                           left: 14, right: 14, top: 10, bottom: 10),
                       child: Column(
                         crossAxisAlignment:
@@ -815,10 +866,9 @@ class _Chat extends State<Chat> {
                               borderRadius: BorderRadius.circular(20),
                               color: Colors.green[800],
                             ),
-                            padding: EdgeInsets.all(8),
+                            padding: const EdgeInsets.all(8),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment
-                                  .end, // Align timestamp to bottom-right
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Image.memory(
                                   filteredMessages[index].imageData!,
@@ -831,16 +881,16 @@ class _Chat extends State<Chat> {
                                     padding: const EdgeInsets.only(top: 5.0),
                                     child: Text(
                                       filteredMessages[index].reaction!,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                           fontSize: 20, color: Colors.white),
                                     ),
                                   ),
-                                SizedBox(height: 5),
+                                const SizedBox(height: 5),
                                 Text(
                                   _formatTimestamp(
                                       filteredMessages[index].timestamp),
                                   style: textTheme.bodySmall?.copyWith(
-                                      fontSize: 10, color: Colors.white),
+                                      fontSize: 6, color: Colors.white),
                                 ),
                               ],
                             ),
@@ -857,7 +907,7 @@ class _Chat extends State<Chat> {
                         builder: (BuildContext context) {
                           return AlertDialog(
                             title: Text(
-                              "Message Options",
+                              S.of(context).messageOptionsTitle,
                               style: textTheme.titleLarge,
                             ),
                             content: Text(
@@ -868,15 +918,15 @@ class _Chat extends State<Chat> {
                               if (filteredMessages[index].messageType ==
                                   "sender") ...[
                                 TextButton(
-                                  child:
-                                      Text("Edit", style: textTheme.labelLarge),
+                                  child: Text(S.of(context).edit,
+                                      style: textTheme.labelLarge),
                                   onPressed: () {
                                     editMessage(index);
                                     Navigator.of(context).pop();
                                   },
                                 ),
                                 TextButton(
-                                  child: Text("Delete",
+                                  child: Text(S.of(context).delete,
                                       style: textTheme.labelLarge),
                                   onPressed: () {
                                     Navigator.of(context).pop();
@@ -887,7 +937,7 @@ class _Chat extends State<Chat> {
                               if (filteredMessages[index].messageType ==
                                   "receiver")
                                 TextButton(
-                                  child: Text("React",
+                                  child: Text(S.of(context).react,
                                       style: textTheme.labelLarge),
                                   onPressed: () {
                                     showDialog(
@@ -902,21 +952,21 @@ class _Chat extends State<Chat> {
                                             spacing: 10,
                                             children: [
                                               IconButton(
-                                                icon: Text("👍"),
+                                                icon: const Text("👍"),
                                                 onPressed: () {
                                                   reactToMessage(index, "👍");
                                                   Navigator.of(context).pop();
                                                 },
                                               ),
                                               IconButton(
-                                                icon: Text("❤️"),
+                                                icon: const Text("❤️"),
                                                 onPressed: () {
                                                   reactToMessage(index, "❤️");
                                                   Navigator.of(context).pop();
                                                 },
                                               ),
                                               IconButton(
-                                                icon: Text("😂"),
+                                                icon: const Text("😂"),
                                                 onPressed: () {
                                                   reactToMessage(index, "😂");
                                                   Navigator.of(context).pop();
@@ -930,16 +980,16 @@ class _Chat extends State<Chat> {
                                   },
                                 ),
                               TextButton(
-                                child:
-                                    Text("Copy", style: textTheme.labelLarge),
+                                child: Text(S.of(context).copy,
+                                    style: textTheme.labelLarge),
                                 onPressed: () {
                                   copyMessage(index);
                                   Navigator.of(context).pop();
                                 },
                               ),
                               TextButton(
-                                child:
-                                    Text("Reply", style: textTheme.labelLarge),
+                                child: Text(S.of(context).reply,
+                                    style: textTheme.labelLarge),
                                 onPressed: () {
                                   replyTo(index);
                                   Navigator.of(context).pop();
@@ -947,7 +997,7 @@ class _Chat extends State<Chat> {
                               ),
                               TextButton(
                                 child: Text(
-                                  "Cancel",
+                                  S.of(context).cancel,
                                   style: textTheme.labelLarge
                                       ?.copyWith(color: Colors.red),
                                 ),
@@ -962,7 +1012,7 @@ class _Chat extends State<Chat> {
                     },
                     child: Container(
                       alignment: Alignment.bottomCenter,
-                      padding: EdgeInsets.only(
+                      padding: const EdgeInsets.only(
                           left: 10, right: 14, top: 10, bottom: 10),
                       child: Align(
                         alignment:
@@ -971,21 +1021,20 @@ class _Chat extends State<Chat> {
                                 : Alignment.bottomRight),
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width *
-                                0.75, // Set max width to 75% of screen width
+                            maxWidth: MediaQuery.of(context).size.width * 0.75,
                           ),
                           child: Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(20),
                               color: Colors.green[800],
                             ),
-                            padding: EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(16),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 if (filteredMessages[index].replyTo != null)
                                   Container(
-                                    padding: EdgeInsets.only(bottom: 5),
+                                    padding: const EdgeInsets.only(bottom: 5),
                                     decoration: BoxDecoration(
                                       border: Border(
                                         bottom: BorderSide(
@@ -1014,7 +1063,7 @@ class _Chat extends State<Chat> {
                                 if (filteredMessages[index].reaction != null)
                                   Text(
                                     filteredMessages[index].reaction!,
-                                    style: TextStyle(fontSize: 20),
+                                    style: const TextStyle(fontSize: 20),
                                   ),
                                 if (filteredMessages[index].autoDelete &&
                                     filteredMessages[index].timeRemaining !=
@@ -1022,7 +1071,8 @@ class _Chat extends State<Chat> {
                                   Text(
                                     "Self-destructs in ${filteredMessages[index].timeRemaining} seconds",
                                     style: textTheme.bodySmall?.copyWith(
-                                        fontSize: 10, color: theme.errorColor),
+                                        fontSize: 10,
+                                        color: theme.colorScheme.error),
                                   ),
                                 Text(
                                   _formatTimestamp(
@@ -1043,7 +1093,7 @@ class _Chat extends State<Chat> {
           ),
           if (replyToMessage != null)
             Container(
-              padding: EdgeInsets.all(10),
+              padding: const EdgeInsets.all(10),
               color: theme.cardColor,
               child: Row(
                 children: <Widget>[
@@ -1068,7 +1118,7 @@ class _Chat extends State<Chat> {
           if (editingIndex != null)
             Container(
               color: theme.cardColor,
-              padding: EdgeInsets.all(10),
+              padding: const EdgeInsets.all(10),
               child: Row(
                 children: <Widget>[
                   Expanded(
@@ -1091,14 +1141,10 @@ class _Chat extends State<Chat> {
               ),
             ),
           Container(
-            padding: EdgeInsets.only(left: 10, bottom: 10, top: 10),
+            padding: const EdgeInsets.only(left: 10, bottom: 10, top: 10),
             color: theme.scaffoldBackgroundColor,
             child: Row(
               children: <Widget>[
-                IconButton(
-                  icon: Icon(Icons.image),
-                  onPressed: _pickImage,
-                ),
                 Expanded(
                   child: TextFormField(
                     validator: (value) {
@@ -1114,8 +1160,8 @@ class _Chat extends State<Chat> {
                         fontFamily: 'RobotoMono'),
                     decoration: InputDecoration(
                       hintText: editingIndex == null
-                          ? "Enter your message..."
-                          : "Edit your message...",
+                          ? S.of(context).enterMessage
+                          : S.of(context).editMessage,
                       hintStyle: textTheme.bodyLarge?.copyWith(
                           color: theme.textTheme.bodyMedium?.color,
                           fontFamily: 'RobotoMono'),
@@ -1151,15 +1197,13 @@ class _Chat extends State<Chat> {
                                       ),
                                     ),
                                   ),
-                                  SizedBox(width: 8),
-                                  Text("seconds"),
                                 ],
                               ),
                             ],
                           ),
                           actions: <Widget>[
                             TextButton(
-                              child: Text("Cancel"),
+                              child: Text(S.of(context).cancel),
                               onPressed: () {
                                 Navigator.of(context).pop();
                               },
@@ -1182,14 +1226,26 @@ class _Chat extends State<Chat> {
                     onPressed: () {
                       if (editingIndex == null) {
                         if (myController.text.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text("Please enter a message")));
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(S.of(context).pleaseEnterMessage)));
                         } else if (filter.hasProfanity(myController.text)) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content:
-                                      Text("Please do not enter profanity")));
+                          showDialog(
+                            context: context,
+                            builder: (BuildContext context) {
+                              return AlertDialog(
+                                title: Text(S.of(context).profanityDetected),
+                                content: Text("Please do not enter profanity"),
+                                actions: [
+                                  TextButton(
+                                    child: Text(S.of(context).ok),
+                                    onPressed: () {
+                                      Navigator.of(context).pop();
+                                    },
+                                  ),
+                                ],
+                              );
+                            },
+                          );
                         } else {
                           sendMessage(myController.text);
                         }
@@ -1197,7 +1253,7 @@ class _Chat extends State<Chat> {
                         saveEditedMessage(myController.text);
                       }
                     },
-                    child: Icon(
+                    child: const Icon(
                       Icons.play_circle_outline_rounded,
                       color: Colors.white,
                       size: 18,
@@ -1207,8 +1263,39 @@ class _Chat extends State<Chat> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.games),
-                  onPressed: _showGameMenu,
+                  icon: const Icon(Icons.menu),
+                  onPressed: () {
+                    showModalBottomSheet(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return Container(
+                          width: double.infinity,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ListTile(
+                                leading: Icon(Icons.image),
+                                title: Text(S.of(context).sendImage),
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  _pickImage();
+                                },
+                              ),
+                              ListTile(
+                                leading: Icon(Icons.gamepad),
+                                title: Text(S.of(context).playGame),
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  _showGameMenu();
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
                 ),
               ],
             ),
@@ -1223,19 +1310,18 @@ class _Chat extends State<Chat> {
       messageContent: content,
       messageType: "system",
       messageFormat: "system",
-      timestamp: DateTime.now().toUtc().add(Duration(hours: 8)),
+      timestamp: DateTime.now().toUtc().add(const Duration(hours: 8)),
     );
     addMessageToList(obj);
   }
 
-  void _disconnectAndExit() {
+  void _disconnectAndExit() async {
     widget.nearbyService.sendMessage(
-      widget.connected_device.deviceId,
+      widget.connectedDevice.deviceId,
       "disconnect|partner_disconnected",
     );
-
+    await _saveChatHistoryAndExit();
     receivedDataSubscription.cancel();
-
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -1254,10 +1340,27 @@ class _Chat extends State<Chat> {
             child: ListBody(
               children: <Widget>[
                 ListTile(
-                  title: Text("Tic Tac Toe"),
+                  leading: const Icon(Icons.gamepad),
+                  title: Text(S.of(context).startTicTacToe),
                   onTap: () {
                     Navigator.of(context).pop();
                     startTicTacToe();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.gamepad),
+                  title: Text(S.of(context).startConnectFour),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    startConnectFour();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.gamepad),
+                  title: Text(S.of(context).startOthello),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    startOthello();
                   },
                 ),
               ],
@@ -1265,7 +1368,7 @@ class _Chat extends State<Chat> {
           ),
           actions: <Widget>[
             TextButton(
-              child: Text("Cancel"),
+              child: Text(S.of(context).cancel),
               onPressed: () {
                 Navigator.of(context).pop();
               },
@@ -1279,9 +1382,7 @@ class _Chat extends State<Chat> {
   void _formatSelectedText(String format) {
     final selectedText = myController.text
         .substring(myController.selection.start, myController.selection.end);
-
     String formattedText = selectedText;
-
     switch (format) {
       case 'bold':
         formattedText = '**$selectedText**';
@@ -1299,10 +1400,8 @@ class _Chat extends State<Chat> {
         formattedText = '~highlight{$selectedText}';
         break;
     }
-
     final newText = myController.text.replaceRange(myController.selection.start,
         myController.selection.end, formattedText);
-
     setState(() {
       myController.text = newText;
       myController.selection = TextSelection.collapsed(
@@ -1315,36 +1414,119 @@ class _Chat extends State<Chat> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text("Start Tic Tac Toe"),
+          title: Text(S.of(context).startTicTacToe),
           content: Text("Are you sure you want to start a Tic Tac Toe game?"),
           actions: <Widget>[
             TextButton(
-              child: Text("Cancel"),
+              child: Text(S.of(context).cancel),
               onPressed: () {
                 Navigator.of(context).pop();
               },
             ),
             TextButton(
-              child: Text("Start"),
+              child: Text(S.of(context).start),
               onPressed: () {
-                sendSystemMessage("Played Tic Tac Toe");
+                sendSystemMessage(S.of(context).playedTicTacToe);
                 Navigator.of(context).pop();
-
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
                     builder: (context) => TicTacToePage(
                       nearbyService: widget.nearbyService,
-                      connectedDevice: widget.connected_device,
+                      connectedDevice: widget.connectedDevice,
                       currentDevicePlayer: "X",
                       myData: widget.myData,
-                      chat_state: messages.isNotEmpty ? messages : null,
+                      chatState: messages.isNotEmpty ? messages : null,
                     ),
                   ),
                 );
-
                 widget.nearbyService.sendMessage(
-                    widget.connected_device.deviceId, "tictactoe|start|O");
+                    widget.connectedDevice.deviceId, "tictactoe|start|O");
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void startConnectFour() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(S.of(context).startConnectFour),
+          content: Text("Are you sure you want to start a Connect Four game?"),
+          actions: <Widget>[
+            TextButton(
+              child: Text(S.of(context).cancel),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text(S.of(context).start),
+              onPressed: () {
+                sendSystemMessage(S.of(context).playedConnectFour);
+                Navigator.of(context).pop();
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ConnectFourPage(
+                      nearbyService: widget.nearbyService,
+                      connectedDevice: widget.connectedDevice,
+                      currentDevicePlayer: "R", // Red starts and goes first
+                      myData: widget.myData,
+                      chatState: messages.isNotEmpty ? messages : null,
+                    ),
+                  ),
+                );
+                // Notify the other device to be Yellow and go second
+                widget.nearbyService.sendMessage(
+                    widget.connectedDevice.deviceId, "connectfour|start|Y");
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void startOthello() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(S.of(context).startOthello),
+          content: Text("Are you sure you want to start an Othello game?"),
+          actions: <Widget>[
+            TextButton(
+              child: Text(S.of(context).cancel),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text(S.of(context).start),
+              onPressed: () {
+                // The player who starts the game is Black
+                sendSystemMessage(S.of(context).playedOthello);
+                Navigator.of(context).pop();
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => OthelloPage(
+                      nearbyService: widget.nearbyService,
+                      connectedDevice: widget.connectedDevice,
+                      currentDevicePlayer: "B", // Black starts first
+                      myData: widget.myData,
+                      chatState: messages.isNotEmpty ? messages : null,
+                    ),
+                  ),
+                );
+                // Send a message to the connected device to start the game as White
+                widget.nearbyService.sendMessage(
+                    widget.connectedDevice.deviceId, "othello|start|W");
               },
             ),
           ],
@@ -1355,25 +1537,23 @@ class _Chat extends State<Chat> {
 
   void _pickImage() async {
     try {
-      final ImagePicker _picker = ImagePicker();
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
       if (image != null) {
         Uint8List imageData = await image.readAsBytes();
         int imageSize = imageData.lengthInBytes;
 
+        // Check if image is too large
         if (imageSize >= 20 * 1024) {
-          // Show dialog if the image is 20KB or larger
           showDialog(
             context: context,
             builder: (BuildContext context) {
               return AlertDialog(
-                title: Text("Image Too Large"),
-                content: Text(
-                    "Your selected image is too large to send. Please choose an image smaller than 20KB."),
+                title: Text(S.of(context).imageTooLarge),
+                content: Text(S.of(context).imageTooLargeMessage),
                 actions: <Widget>[
                   TextButton(
-                    child: Text("OK"),
+                    child: Text(S.of(context).ok),
                     onPressed: () {
                       Navigator.of(context).pop();
                     },
@@ -1383,34 +1563,65 @@ class _Chat extends State<Chat> {
             },
           );
         } else {
-          // Extract text from the image using OCR
-          final String ocrText;
-          try {
-            ocrText = await FlutterTesseractOcr.extractText(
-              image.path,
-              language:
-                  'eng', // Ensure you have the eng.traineddata in your assets
-            );
-            print("OCR Text Detected: $ocrText");
-          } catch (e) {
-            print("Error during OCR: $e");
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text("Failed to process the image for text")),
-            );
-            return;
-          }
-
-          // Check if recognized text contains profanity
-          if (ocrText.isNotEmpty && filter.hasProfanity(ocrText)) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content:
-                      Text("The image contains profanity and cannot be sent")),
+          // Check for nudity using flutter_nude_detector
+          final containsNudity =
+              await FlutterNudeDetector.detect(path: image.path);
+          if (containsNudity) {
+            showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: Text("Nudity Detected"),
+                  content: Text("Please do not send inappropriate images"),
+                  actions: <Widget>[
+                    TextButton(
+                      child: Text(S.of(context).ok),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ],
+                );
+              },
             );
           } else {
-            // Send the image if no profanity is found
-            sendMessage("Image", imageData: imageData);
+            // Continue with OCR processing if no nudity detected
+            final inputImage = InputImage.fromFilePath(image.path);
+            final textRecognizer = TextRecognizer();
+            try {
+              final RecognizedText recognizedText =
+                  await textRecognizer.processImage(inputImage);
+              final String ocrText = recognizedText.text;
+
+              if (ocrText.isNotEmpty && filter.hasProfanity(ocrText)) {
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: Text(S.of(context).profanityDetected),
+                      content: Text(S.of(context).profanityDetectedMessage),
+                      actions: <Widget>[
+                        TextButton(
+                          child: Text(S.of(context).ok),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
+              } else {
+                sendMessage("Image", imageData: imageData);
+              }
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text("Failed to process the image for text")),
+              );
+            } finally {
+              textRecognizer.close();
+            }
           }
         }
       } else {

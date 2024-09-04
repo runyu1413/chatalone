@@ -6,15 +6,65 @@
   "enterNewName": "Masukkan Nama Baru",
   "cancel": "Batal",
   "confirm": "Sahkan",
-  "findNearbyDevice": "Cari Peranti Berdekatan",
-  "groupChat": "Sembang Kumpulan",
+  "newChat": "Sembang Baru",
+  "oldChat": "Sembang Lama",
   "settings": "Tetapan",
+  "title": "Tajuk",
+  "searchHint": "Cari...",
+  "messageOptionsTitle": "Pilihan Mesej",
+  "disconnectTitle": "Putus Sambungan",
+  "disconnectMessage": "Adakah anda pasti mahu putuskan sambungan?",
+  "disconnect": "Putuskan Sambungan",
+  "sendImage": "Hantar Imej",
+  "playGame": "Main Permainan",
+  "edit": "Sunting",
+  "delete": "Padam",
+  "copy": "Salin",
+  "reply": "Balas",
+  "react": "Reaksi",
+  "start": "Mulakan",
+  "startTicTacToe": "Mulakan Tic Tac Toe",
+  "startConnectFour": "Mulakan Connect Four",
+  "startOthello": "Mulakan Othello",
+  "imageTooLarge": "Imej Terlalu Besar",
+  "imageTooLargeMessage": "Imej yang dipilih terlalu besar untuk dihantar. Sila pilih imej yang lebih kecil daripada 20KB.",
+  "profanityDetected": "Kata-Kata Kesat Dikesan",
+  "profanityDetectedMessage": "Imej mengandungi kata-kata kesat dan tidak boleh dihantar.",
+  "ok": "OK",
+  "enterMessage": "Masukkan mesej anda...",
+  "editMessage": "Sunting mesej anda...",
+  "pleaseEnterMessage": "Sila masukkan mesej",
+  "messageContainsProfanity": "Mesej mengandungi kata-kata kesat",
+  "selfDestructsIn": "Hapus diri dalam {time} saat",
+  "@selfDestructsIn": {
+    "description": "A message indicating how long until a message self-destructs.",
+    "placeholders": {
+      "time": {
+        "type": "int",
+        "example": "10"
+      }
+    }
+  },
+  "playedTicTacToe": "Main Tic Tac Toe",
+  "playedConnectFour": "Main Connect Four",
+  "playedOthello": "Main Othello",
+  "failedToProcessImage": "Gagal memproses imej untuk teks",
+  "imageNotSelected": "Tiada imej yang dipilih.",
+  "errorPickingImage": "Ralat semasa memilih imej: {error}",
+  "@errorPickingImage": {
+    "description": "Error message when failing to pick an image.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "Tiada kebenaran untuk mengakses imej."
+      }
+    }
+  },
   "@welcomeText": {
     "description": "Mesej selamat datang untuk pengguna"
   },
   "@settings": {
-    "description": "Judul untuk halaman tetapan"
+    "description": "Tajuk halaman tetapan"
   }
 }
-
   
