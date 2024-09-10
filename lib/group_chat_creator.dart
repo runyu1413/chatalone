@@ -22,7 +22,6 @@ class ChatMessage {
   String messageFormat;
   DateTime timestamp;
   Uint8List? imageData;
-  String personName;
 
   ChatMessage({
     this.id,
@@ -31,7 +30,6 @@ class ChatMessage {
     required this.messageType,
     required this.messageFormat,
     required this.timestamp,
-    required this.personName,
     this.imageData,
   });
 
@@ -42,7 +40,6 @@ class ChatMessage {
       'messageContent': messageContent,
       'messageType': messageType,
       'messageFormat': messageFormat,
-      'personName': personName,
       'timestamp': timestamp.toIso8601String(),
       'imageData': imageData,
     };
@@ -56,28 +53,28 @@ class ChatMessage {
       messageType: map['messageType'],
       messageFormat: map['messageFormat'],
       timestamp: DateTime.parse(map['timestamp']),
-      personName: map['personName'],
       imageData: map['imageData'],
     );
   }
 }
 
-class GroupChat extends StatefulWidget {
-  final Device connectedDevice;
+class GroupChatCreator extends StatefulWidget {
+  List<Device> connectedDevices;
   NearbyService nearbyService;
   String myName;
   var chatState;
-  GroupChat({
-    required this.myName,
-    required this.connectedDevice,
-    required this.nearbyService,
-  });
+  String groupName;
+  GroupChatCreator(
+      {required this.myName,
+      required this.connectedDevices,
+      required this.nearbyService,
+      required this.groupName});
 
   @override
-  State<StatefulWidget> createState() => _GroupChat();
+  State<StatefulWidget> createState() => _GroupChatCreator();
 }
 
-class _GroupChat extends State<GroupChat> {
+class _GroupChatCreator extends State<GroupChatCreator> {
   late StreamSubscription subscription;
   late StreamSubscription receivedDataSubscription;
   final filter = ProfanityFilter();
@@ -172,7 +169,6 @@ class _GroupChat extends State<GroupChat> {
 
     var obj = ChatMessage(
       chatId: chatId,
-      personName: widget.connectedDevice.deviceName,
       messageContent: content,
       messageType: "sender",
       messageFormat: message,
@@ -181,8 +177,9 @@ class _GroupChat extends State<GroupChat> {
     );
 
     addMessageToList(obj);
-    widget.nearbyService
-        .sendMessage(widget.connectedDevice.deviceId, finalMessage);
+    for (Device device in this.widget.connectedDevices) {
+      widget.nearbyService.sendMessage(device.deviceId, finalMessage);
+    }
 
     myController.clear();
   }
@@ -266,14 +263,19 @@ class _GroupChat extends State<GroupChat> {
     receivedDataSubscription =
         widget.nearbyService.dataReceivedSubscription(callback: (data) {
       final splited = data["message"].split('|');
+      String? senderDeviceId = data["deviceId"];
       if (splited[0] == "message" || splited[0] == "image") {
         Uint8List? imageData;
         if (splited[0] == "image" && splited.length > 2) {
           imageData = base64Decode(splited.last);
         }
+        for (Device device in widget.connectedDevices) {
+          if (device.deviceId != senderDeviceId) {
+            widget.nearbyService.sendMessage(device.deviceId, data["message"]);
+          }
+        }
         var obj = ChatMessage(
           chatId: chatId,
-          personName: widget.connectedDevice.deviceName,
           messageContent: splited[1],
           messageType: "receiver",
           messageFormat: splited[0],
@@ -465,7 +467,7 @@ class _GroupChat extends State<GroupChat> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
                             Text(
-                              widget.connectedDevice.deviceName,
+                              widget.groupName,
                               style: textTheme.titleLarge?.copyWith(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w500,
@@ -815,7 +817,6 @@ class _GroupChat extends State<GroupChat> {
   void sendSystemMessage(String content) {
     var obj = ChatMessage(
       chatId: chatId,
-      personName: widget.connectedDevice.deviceName,
       messageContent: content,
       messageType: "system",
       messageFormat: "system",
@@ -825,10 +826,12 @@ class _GroupChat extends State<GroupChat> {
   }
 
   void _disconnectAndExit() async {
-    widget.nearbyService.sendMessage(
-      widget.connectedDevice.deviceId,
-      "disconnect|partner_disconnected",
-    );
+    for (Device device in widget.connectedDevices) {
+      widget.nearbyService.sendMessage(
+        device.deviceId,
+        "disconnect|partner_disconnected",
+      );
+    }
     await _saveChatHistoryAndExit();
     receivedDataSubscription.cancel();
     Navigator.pushReplacement(

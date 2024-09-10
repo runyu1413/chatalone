@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
-import 'package:device_info/device_info.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
-import 'package:ntu_fyp_chatalone/mesh_chat.dart';
 import 'chat.dart';
 
 class DevicesListScreen extends StatefulWidget {
@@ -48,47 +46,9 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
       appBar: AppBar(
         backgroundColor: theme.appBarTheme.backgroundColor,
         foregroundColor: theme.appBarTheme.foregroundColor,
-        centerTitle: true,
-        title: Row(
-          children: [
-            SizedBox(width: 40),
-            Text(
-              "Finding nearby devices",
-              style: textTheme.titleLarge?.copyWith(fontFamily: 'RobotoMono'),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: Container(
-        height: 60,
-        color: theme.bottomAppBarTheme.color,
-        child: InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => MeshChat(
-                myName: widget.mydata,
-                connected_device: connectedDevices,
-                nearbyService: nearbyService,
-              ),
-            ),
-          ),
-          child: Padding(
-            padding: EdgeInsets.only(top: 7.5),
-            child: Column(
-              children: <Widget>[
-                Icon(
-                  Icons.chat_bubble,
-                  color: theme.iconTheme.color,
-                ),
-                Text(
-                  'Mesh Chat',
-                  style:
-                      textTheme.labelLarge?.copyWith(fontFamily: 'RobotoMono'),
-                ),
-              ],
-            ),
-          ),
+        title: Text(
+          "Nearby Person",
+          style: textTheme.titleLarge?.copyWith(fontFamily: 'RobotoMono'),
         ),
       ),
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -255,7 +215,7 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
     nearbyService = NearbyService();
     await nearbyService.init(
       serviceType: 'mpconn',
-      deviceName: widget.mydata,
+      deviceName: 'person:${widget.mydata}',
       strategy: Strategy.P2P_CLUSTER,
       callback: (isRunning) async {
         if (isRunning) {
@@ -277,7 +237,11 @@ class _DevicesListScreenState extends State<DevicesListScreen> {
       });
       setState(() {
         devices.clear();
-        devices.addAll(devicesList);
+        devices.addAll(
+            devicesList.where((d) => d.deviceName.contains('person:')).map((d) {
+          d.deviceName = d.deviceName.replaceAll('person:', '');
+          return d;
+        }).toList());
         connectedDevices.clear();
         connectedDevices.addAll(devicesList
             .where((d) => d.state == SessionState.connected)

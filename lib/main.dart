@@ -1,16 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
-import 'package:ntu_fyp_chatalone/createuser.dart';
-import 'package:ntu_fyp_chatalone/group.dart';
+import 'package:ntu_fyp_chatalone/group_list.dart';
 import 'home.dart';
 import 'devicesList.dart';
 import 'generated/l10n.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:ntu_fyp_chatalone/settings.dart'; // Adjust the path based on your project structure
-import 'chat_history.dart'; // Import the ChatHistoryPage
+import 'settings.dart';
+import 'chat_history.dart';
 import 'chat_sessions_page.dart';
+import 'group_created_list.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -137,7 +136,7 @@ class _MyAppState extends State<MyApp> {
                       snapshot.data!.isNotEmpty) {
                     return Home(name: snapshot.data!);
                   } else {
-                    return SettingsPage(); // Direct to settings page if username is not set
+                    return SettingsPage();
                   }
                 },
               ),
@@ -158,13 +157,19 @@ class _MyAppState extends State<MyApp> {
             return MaterialPageRoute(
               builder: (context) => GroupListScreen(mydata: name),
             );
+          case 'createdGroup':
+            final name = settings.arguments as String;
+            return MaterialPageRoute(
+              builder: (context) =>
+                  GroupCreatedScreen(mydata: name, groupName: ""),
+            );
           case 'settings':
             return MaterialPageRoute(builder: (context) => SettingsPage());
-          case 'chatSessions': // Add this case for Chat Sessions
+          case 'chatSessions':
             return MaterialPageRoute(
               builder: (context) => ChatSessionsPage(),
             );
-          case 'chatHistory': // Add this case for Chat History
+          case 'chatHistory':
             final chatId = settings.arguments as String;
             return MaterialPageRoute(
               builder: (context) => ChatHistoryPage(chatId: chatId),
