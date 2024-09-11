@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'database_helper.dart';
 import 'package:intl/intl.dart';
-import 'chat_history.dart';
+import 'gc_history.dart';
 
-class ChatSessionsPage extends StatefulWidget {
+class GroupChatSessionsPage extends StatefulWidget {
   @override
-  _ChatSessionsPageState createState() => _ChatSessionsPageState();
+  _GroupChatSessionsPageState createState() => _GroupChatSessionsPageState();
 }
 
-class _ChatSessionsPageState extends State<ChatSessionsPage> {
+class _GroupChatSessionsPageState extends State<GroupChatSessionsPage> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> chatSessions = [];
 
@@ -21,7 +21,7 @@ class _ChatSessionsPageState extends State<ChatSessionsPage> {
   // Load the latest message for each chat session
   Future<void> _loadChatSessions() async {
     List<Map<String, dynamic>> sessions =
-        await _dbHelper.getLatestMessagesForEachChat();
+        await _dbHelper.getLatestGroupMessagesForEachChat();
 
     // Make a mutable copy of the list before sorting
     List<Map<String, dynamic>> mutableSessions =
@@ -49,19 +49,19 @@ class _ChatSessionsPageState extends State<ChatSessionsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Person Chat'),
+        title: Text('Group Chat'),
       ),
       body: chatSessions.isNotEmpty
           ? ListView.builder(
               itemCount: chatSessions.length,
               itemBuilder: (context, index) {
-                String personName =
-                    chatSessions[index]['personName'] ?? 'Unknown';
+                String groupName =
+                    chatSessions[index]['groupName'] ?? 'Unknown';
                 String timestamp = chatSessions[index]['timestamp'];
                 String formattedTimestamp = _formatTimestamp(timestamp);
 
                 return ListTile(
-                  title: Text(personName),
+                  title: Text(groupName),
                   subtitle: Text('Last message at: $formattedTimestamp'),
                   trailing: IconButton(
                     icon: Icon(Icons.delete, color: Colors.red),
@@ -74,9 +74,9 @@ class _ChatSessionsPageState extends State<ChatSessionsPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => ChatHistoryPage(
+                        builder: (context) => GroupChatHistoryPage(
                           chatId: chatSessions[index]['chatId'],
-                          personName: personName,
+                          groupName: groupName,
                         ),
                       ),
                     );

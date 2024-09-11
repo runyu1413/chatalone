@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
 import 'chat.dart';
+import 'message.dart';
 
 class ConnectFourPage extends StatefulWidget {
   final NearbyService nearbyService;

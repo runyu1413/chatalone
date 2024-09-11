@@ -11,52 +11,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:flutter_nude_detector/flutter_nude_detector.dart';
 import 'home.dart';
+import 'database_helper.dart';
+import 'message.dart';
 import 'package:uuid/uuid.dart';
 import 'package:ntu_fyp_chatalone/generated/l10n.dart';
-
-class ChatMessage {
-  int? id;
-  String chatId;
-  String messageContent;
-  String messageType;
-  String messageFormat;
-  DateTime timestamp;
-  Uint8List? imageData;
-
-  ChatMessage({
-    this.id,
-    required this.chatId,
-    required this.messageContent,
-    required this.messageType,
-    required this.messageFormat,
-    required this.timestamp,
-    this.imageData,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'chatId': chatId,
-      'messageContent': messageContent,
-      'messageType': messageType,
-      'messageFormat': messageFormat,
-      'timestamp': timestamp.toIso8601String(),
-      'imageData': imageData,
-    };
-  }
-
-  static ChatMessage fromMap(Map<String, dynamic> map) {
-    return ChatMessage(
-      id: map['id'],
-      chatId: map['chatId'],
-      messageContent: map['messageContent'],
-      messageType: map['messageType'],
-      messageFormat: map['messageFormat'],
-      timestamp: DateTime.parse(map['timestamp']),
-      imageData: map['imageData'],
-    );
-  }
-}
 
 class GroupChatCreator extends StatefulWidget {
   List<Device> connectedDevices;
@@ -78,8 +36,8 @@ class _GroupChatCreator extends State<GroupChatCreator> {
   late StreamSubscription subscription;
   late StreamSubscription receivedDataSubscription;
   final filter = ProfanityFilter();
-  List<ChatMessage> messages = [];
-  List<ChatMessage> filteredMessages = [];
+  List<GroupChatMessage> messages = [];
+  List<GroupChatMessage> filteredMessages = [];
   List<int> searchResults = [];
   int currentSearchIndex = 0;
   String searchTerm = '';
@@ -115,6 +73,7 @@ class _GroupChatCreator extends State<GroupChatCreator> {
   }
 
   Future<void> _saveChatHistoryAndExit() async {
+    await _saveMessagesToDatabase();
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => Home(name: widget.myName)),
@@ -122,6 +81,7 @@ class _GroupChatCreator extends State<GroupChatCreator> {
   }
 
   Future<void> _saveChatHistoryAfterDisconnect() async {
+    await _saveMessagesToDatabase();
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -147,7 +107,7 @@ class _GroupChatCreator extends State<GroupChatCreator> {
     );
   }
 
-  void addMessageToList(ChatMessage obj) {
+  void addMessageToList(GroupChatMessage obj) {
     setState(() {
       messages.add(obj);
       filteredMessages = messages;
@@ -160,15 +120,19 @@ class _GroupChatCreator extends State<GroupChatCreator> {
 
   void sendMessage(String content, {Uint8List? imageData}) {
     String message = imageData != null ? "image" : "message";
-    String finalMessage = "$message|" + content;
+
+    // Include the sender's name (myName) in the message string
+    String finalMessage = "$message|$content|${widget.myName}";
 
     if (imageData != null) {
       String base64Image = base64Encode(imageData);
       finalMessage += "|$base64Image";
     }
 
-    var obj = ChatMessage(
+    var obj = GroupChatMessage(
       chatId: chatId,
+      personName: widget.myName,
+      groupName: widget.groupName,
       messageContent: content,
       messageType: "sender",
       messageFormat: message,
@@ -266,16 +230,19 @@ class _GroupChatCreator extends State<GroupChatCreator> {
       String? senderDeviceId = data["deviceId"];
       if (splited[0] == "message" || splited[0] == "image") {
         Uint8List? imageData;
-        if (splited[0] == "image" && splited.length > 2) {
-          imageData = base64Decode(splited.last);
+        if (splited[0] == "image" && splited.length > 3) {
+          imageData = base64Decode(splited[3]);
         }
         for (Device device in widget.connectedDevices) {
           if (device.deviceId != senderDeviceId) {
             widget.nearbyService.sendMessage(device.deviceId, data["message"]);
           }
         }
-        var obj = ChatMessage(
+        String senderName = splited[2];
+        var obj = GroupChatMessage(
           chatId: chatId,
+          personName: senderName,
+          groupName: widget.groupName,
           messageContent: splited[1],
           messageType: "receiver",
           messageFormat: splited[0],
@@ -285,9 +252,36 @@ class _GroupChatCreator extends State<GroupChatCreator> {
         addMessageToList(obj);
       } else if (splited[0] == "disconnect" &&
           splited[1] == "partner_disconnected") {
-        _saveChatHistoryAfterDisconnect();
+        String disconnectedUser = widget.connectedDevices
+            .firstWhere(
+              (device) => device.deviceId == senderDeviceId,
+            )
+            .deviceName;
+
+        // Send system message about the disconnection
+        String systemMessage = "$disconnectedUser has disconnected from chat.";
+        sendSystemMessage(systemMessage);
+        for (Device device in widget.connectedDevices) {
+          if (device.deviceId != senderDeviceId) {
+            widget.nearbyService.sendMessage(
+                device.deviceId, "system|disconnect|$systemMessage");
+          }
+        }
       }
     });
+  }
+
+  Future<void> _saveMessagesToDatabase() async {
+    // Initialize the database helper
+    DatabaseHelper dbHelper = DatabaseHelper();
+
+    // Save each message to the database
+    for (var message in messages) {
+      // If the message has an ID, it's already in the database, so skip it
+      if (message.id == null) {
+        await dbHelper.insertGroupMessage(message);
+      }
+    }
   }
 
   void _handleTextSelection() {
@@ -297,7 +291,7 @@ class _GroupChatCreator extends State<GroupChatCreator> {
     });
   }
 
-  TextSpan _buildMessageContent(ChatMessage message, String? searchTerm) {
+  TextSpan _buildMessageContent(GroupChatMessage message, String? searchTerm) {
     final String text = message.messageContent;
     final RegExp pattern = RegExp(
       r'\*\*(.*?)\*\*|'
@@ -590,6 +584,8 @@ class _GroupChatCreator extends State<GroupChatCreator> {
               itemCount: filteredMessages.length,
               padding: const EdgeInsets.only(top: 10, bottom: 10),
               itemBuilder: (context, index) {
+                bool isSender = filteredMessages[index].messageType == 'sender';
+                String senderName = filteredMessages[index].personName;
                 if (filteredMessages[index].messageType == 'system') {
                   return Container(
                     alignment: Alignment.center,
@@ -608,17 +604,15 @@ class _GroupChatCreator extends State<GroupChatCreator> {
                     filteredMessages[index].imageData != null) {
                   return GestureDetector(
                     child: Container(
-                      alignment:
-                          filteredMessages[index].messageType == "receiver"
-                              ? Alignment.centerLeft
-                              : Alignment.centerRight,
+                      alignment: isSender
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
                       padding: const EdgeInsets.only(
                           left: 14, right: 14, top: 10, bottom: 10),
                       child: Column(
-                        crossAxisAlignment:
-                            filteredMessages[index].messageType == "receiver"
-                                ? CrossAxisAlignment.start
-                                : CrossAxisAlignment.end,
+                        crossAxisAlignment: isSender
+                            ? CrossAxisAlignment.end
+                            : CrossAxisAlignment.start,
                         children: [
                           Container(
                             decoration: BoxDecoration(
@@ -629,6 +623,14 @@ class _GroupChatCreator extends State<GroupChatCreator> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                Text(
+                                  senderName,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
                                 Image.memory(
                                   filteredMessages[index].imageData!,
                                   width: 200,
@@ -656,14 +658,11 @@ class _GroupChatCreator extends State<GroupChatCreator> {
                         context: context,
                         builder: (BuildContext context) {
                           return AlertDialog(
-                            title: Text(
-                              S.of(context).messageOptionsTitle,
-                              style: textTheme.titleLarge,
-                            ),
+                            title: Text(S.of(context).messageOptionsTitle,
+                                style: textTheme.titleLarge),
                             content: Text(
-                              "What would you like to do to this message?",
-                              style: textTheme.bodyMedium,
-                            ),
+                                "What would you like to do to this message?",
+                                style: textTheme.bodyMedium),
                             actions: <Widget>[
                               if (filteredMessages[index].messageType ==
                                   "receiver")
@@ -676,11 +675,9 @@ class _GroupChatCreator extends State<GroupChatCreator> {
                                   },
                                 ),
                               TextButton(
-                                child: Text(
-                                  S.of(context).cancel,
-                                  style: textTheme.labelLarge
-                                      ?.copyWith(color: Colors.red),
-                                ),
+                                child: Text(S.of(context).cancel,
+                                    style: textTheme.labelLarge
+                                        ?.copyWith(color: Colors.red)),
                                 onPressed: () {
                                   Navigator.of(context).pop();
                                 },
@@ -695,35 +692,47 @@ class _GroupChatCreator extends State<GroupChatCreator> {
                       padding: const EdgeInsets.only(
                           left: 10, right: 14, top: 10, bottom: 10),
                       child: Align(
-                        alignment:
-                            (filteredMessages[index].messageType == "receiver"
-                                ? Alignment.bottomLeft
-                                : Alignment.bottomRight),
+                        alignment: isSender
+                            ? Alignment.bottomRight
+                            : Alignment.bottomLeft,
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.75,
-                          ),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              color: Colors.green[800],
-                            ),
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                RichText(
-                                  text: _buildMessageContent(
-                                      filteredMessages[index], searchTerm),
+                              maxWidth:
+                                  MediaQuery.of(context).size.width * 0.75),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  color: Colors.green[800],
                                 ),
-                                Text(
-                                  _formatTimestamp(
-                                      filteredMessages[index].timestamp),
-                                  style: textTheme.bodySmall?.copyWith(
-                                      fontSize: 6, color: Colors.white),
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      senderName,
+                                      style: textTheme.bodySmall?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    RichText(
+                                      text: _buildMessageContent(
+                                          filteredMessages[index], searchTerm),
+                                    ),
+                                    Text(
+                                      _formatTimestamp(
+                                          filteredMessages[index].timestamp),
+                                      style: textTheme.bodySmall?.copyWith(
+                                          fontSize: 6, color: Colors.white),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -815,8 +824,10 @@ class _GroupChatCreator extends State<GroupChatCreator> {
   }
 
   void sendSystemMessage(String content) {
-    var obj = ChatMessage(
+    var obj = GroupChatMessage(
       chatId: chatId,
+      personName: widget.myName,
+      groupName: widget.groupName,
       messageContent: content,
       messageType: "system",
       messageFormat: "system",

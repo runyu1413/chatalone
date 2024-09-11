@@ -10,9 +10,16 @@ import 'settings.dart';
 import 'chat_history.dart';
 import 'chat_sessions_page.dart';
 import 'group_created_list.dart';
+import 'gc_sessions_page.dart';
+import 'gc_history.dart';
+import 'database_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  DatabaseHelper dbHelper = DatabaseHelper();
+  await dbHelper.resetDatabase();
+  print("Database reset successfully!");
 
   SharedPreferences prefs = await SharedPreferences.getInstance();
   String? languageCode = prefs.getString('language_code') ?? 'en';
@@ -169,10 +176,9 @@ class _MyAppState extends State<MyApp> {
             return MaterialPageRoute(
               builder: (context) => ChatSessionsPage(),
             );
-          case 'chatHistory':
-            final chatId = settings.arguments as String;
+          case 'createdGroupChatSessions':
             return MaterialPageRoute(
-              builder: (context) => ChatHistoryPage(chatId: chatId),
+              builder: (context) => GroupChatSessionsPage(),
             );
           default:
             return MaterialPageRoute(

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ntu_fyp_chatalone/generated/l10n.dart'; // Import localization
+import 'package:ntu_fyp_chatalone/generated/l10n.dart';
 import 'group_created_list.dart';
 
 TextEditingController txtController = TextEditingController();
@@ -20,13 +20,12 @@ class HomeScreenState extends State<Home> {
   @override
   void initState() {
     super.initState();
-    nameText = widget.name; // Initialize nameText from the widget's property
+    nameText = widget.name;
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Fetch localized strings whenever the dependencies change
     welcomeText = S.of(context).welcomeText;
   }
 
@@ -108,7 +107,7 @@ class HomeScreenState extends State<Home> {
                 width: 300,
                 child: Image.asset(
                   "image/chatalone.png",
-                  fit: BoxFit.cover, // Adjust the fit property as needed
+                  fit: BoxFit.cover,
                 ),
               ),
               const SizedBox(height: 40),
@@ -130,24 +129,20 @@ class HomeScreenState extends State<Home> {
                           context: context,
                           builder: (BuildContext context) {
                             return AlertDialog(
-                              title: Center(
-                                  child: Text(
-                                      "Choose Chat Type")), // Localized title
+                              title: Center(child: Text("Choose Chat Type")),
                               content: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   SizedBox(
-                                    width: double
-                                        .infinity, // Make the button fill the available width
-                                    height: 100, // Set the height of the button
+                                    width: double.infinity,
+                                    height: 100,
                                     child: ElevatedButton(
                                       onPressed: () {
-                                        Navigator.of(context)
-                                            .pop(); // Close the dialog
+                                        Navigator.of(context).pop();
                                         Navigator.of(context).pushNamed(
                                           'start',
                                           arguments: widget.name,
-                                        ); // Navigate to the person chat page
+                                        );
                                       },
                                       style: ElevatedButton.styleFrom(
                                         shape: RoundedRectangleBorder(
@@ -164,8 +159,7 @@ class HomeScreenState extends State<Home> {
                                           const Icon(Icons.person, size: 40),
                                           const SizedBox(height: 8),
                                           Text("Person Chat",
-                                              textAlign: TextAlign
-                                                  .center), // Localized text
+                                              textAlign: TextAlign.center),
                                         ],
                                       ),
                                     ),
@@ -215,7 +209,7 @@ class HomeScreenState extends State<Home> {
                                             return AlertDialog(
                                               title: Center(
                                                   child: Text(
-                                                      "Create Group Chat")), // Localized title
+                                                      "Create Group Chat")),
                                               content: TextField(
                                                 controller: txtController,
                                                 decoration: InputDecoration(
@@ -274,7 +268,7 @@ class HomeScreenState extends State<Home> {
                       },
                       child: Center(
                         child: Text(
-                          S.of(context).newChat, // Use localized string
+                          S.of(context).newChat,
                           style: textTheme.labelLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                             fontSize: 20,
@@ -300,11 +294,83 @@ class HomeScreenState extends State<Home> {
                     clipBehavior: Clip.antiAliasWithSaveLayer,
                     child: InkWell(
                       splashColor: theme.splashColor,
-                      onTap: () =>
-                          Navigator.of(context).pushNamed('chatSessions'),
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (BuildContext context) {
+                            return AlertDialog(
+                              title: Center(child: Text("Choose Chat Type")),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 100,
+                                    child: ElevatedButton(
+                                      onPressed: () {
+                                        Navigator.of(context).pop();
+                                        Navigator.of(context)
+                                            .pushNamed('chatSessions');
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.person, size: 40),
+                                          const SizedBox(height: 8),
+                                          Text("Person Chat",
+                                              textAlign: TextAlign.center),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 100,
+                                    child: ElevatedButton(
+                                      onPressed: () {
+                                        Navigator.of(context).pop();
+                                        Navigator.of(context).pushNamed(
+                                            'createdGroupChatSessions');
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.group, size: 40),
+                                          const SizedBox(height: 8),
+                                          Text("Group Chat",
+                                              textAlign: TextAlign.center),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
                       child: Center(
                         child: Text(
-                          S.of(context).oldChat, // Use localized string
+                          S.of(context).oldChat,
                           style: textTheme.labelLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                             fontSize: 20,

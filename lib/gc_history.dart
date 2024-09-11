@@ -6,23 +6,24 @@ import 'database_helper.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
+import 'generated/l10n.dart';
 
-class ChatHistoryPage extends StatefulWidget {
+class GroupChatHistoryPage extends StatefulWidget {
   final String chatId;
-  final String personName;
+  final String groupName;
 
-  const ChatHistoryPage(
-      {Key? key, required this.chatId, required this.personName})
+  const GroupChatHistoryPage(
+      {Key? key, required this.chatId, required this.groupName})
       : super(key: key);
 
   @override
-  _ChatHistoryPageState createState() => _ChatHistoryPageState();
+  _GroupChatHistoryPageState createState() => _GroupChatHistoryPageState();
 }
 
-class _ChatHistoryPageState extends State<ChatHistoryPage> {
+class _GroupChatHistoryPageState extends State<GroupChatHistoryPage> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  List<ChatMessage> messages = [];
-  List<ChatMessage> filteredMessages = [];
+  List<GroupChatMessage> messages = [];
+  List<GroupChatMessage> filteredMessages = [];
   List<int> searchResults = [];
   int currentSearchIndex = 0;
   String searchTerm = '';
@@ -36,8 +37,8 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
   }
 
   Future<void> _loadChatHistory() async {
-    List<ChatMessage> dbMessages =
-        await _dbHelper.getMessagesByChatId(widget.chatId);
+    List<GroupChatMessage> dbMessages =
+        await _dbHelper.getGroupMessagesByChatId(widget.chatId);
     setState(() {
       messages = dbMessages;
       filteredMessages = messages;
@@ -110,7 +111,7 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
     );
   }
 
-  TextSpan _buildMessageContent(ChatMessage message, String? searchTerm) {
+  TextSpan _buildMessageContent(GroupChatMessage message, String? searchTerm) {
     final String text = message.messageContent;
     final RegExp pattern = RegExp(
       r'\*\*(.*?)\*\*|'
@@ -254,7 +255,7 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
     final textTheme = theme.textTheme;
     return Scaffold(
       appBar: AppBar(
-        title: isSearching ? null : Text(widget.personName),
+        title: isSearching ? null : Text(widget.groupName),
         automaticallyImplyLeading: !isSearching,
         elevation: 0,
         backgroundColor: theme.appBarTheme.backgroundColor,
@@ -321,18 +322,15 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
               itemCount: filteredMessages.length,
               padding: const EdgeInsets.only(top: 10, bottom: 10),
               itemBuilder: (context, index) {
-                final message = filteredMessages[index];
-                final isSender = message.messageType == "sender";
-                final imageData = message.imageData;
-
-                if (message.messageType == "system") {
-                  // Centralize system messages
+                bool isSender = filteredMessages[index].messageType == 'sender';
+                String senderName = filteredMessages[index].personName;
+                if (filteredMessages[index].messageType == 'system') {
                   return Container(
                     alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 10, horizontal: 14),
+                    padding: const EdgeInsets.only(
+                        left: 10, right: 10, top: 10, bottom: 10),
                     child: Text(
-                      message.messageContent,
+                      filteredMessages[index].messageContent,
                       textAlign: TextAlign.center,
                       style: textTheme.bodyMedium?.copyWith(
                         color: Colors.grey,
@@ -340,83 +338,136 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
                       ),
                     ),
                   );
-                }
-
-                // For regular sender/receiver messages
-                return GestureDetector(
-                  onLongPress: () {
-                    showDialog(
-                      context: context,
-                      builder: (BuildContext context) {
-                        return AlertDialog(
-                          title: Text(
-                            "Message Options",
-                            style: textTheme.titleLarge,
-                          ),
-                          content: Text(
-                            "What would you like to do to this message?",
-                            style: textTheme.bodyMedium,
-                          ),
-                          actions: <Widget>[
-                            TextButton(
-                              child: Text("Copy", style: textTheme.labelLarge),
-                              onPressed: () {
-                                copyMessage(index);
-                                Navigator.of(context).pop();
-                              },
-                            ),
-                            TextButton(
-                              child: Text(
-                                "Cancel",
-                                style: textTheme.labelLarge
-                                    ?.copyWith(color: Colors.red),
-                              ),
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                              },
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                  child: Container(
-                    alignment:
-                        isSender ? Alignment.centerRight : Alignment.centerLeft,
-                    padding: const EdgeInsets.only(
-                        left: 10, right: 14, top: 10, bottom: 10),
-                    child: Align(
+                } else if (filteredMessages[index].messageFormat == "image" &&
+                    filteredMessages[index].imageData != null) {
+                  return GestureDetector(
+                    child: Container(
                       alignment: isSender
                           ? Alignment.centerRight
                           : Alignment.centerLeft,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.75,
-                        ),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            color: Colors.green[800],
+                      padding: const EdgeInsets.only(
+                          left: 14, right: 14, top: 10, bottom: 10),
+                      child: Column(
+                        crossAxisAlignment: isSender
+                            ? CrossAxisAlignment.end
+                            : CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              color: Colors.green[800],
+                            ),
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  senderName,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Image.memory(
+                                  filteredMessages[index].imageData!,
+                                  width: 200,
+                                  height: 200,
+                                  fit: BoxFit.cover,
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  _formatTimestamp(
+                                      filteredMessages[index].timestamp),
+                                  style: textTheme.bodySmall?.copyWith(
+                                      fontSize: 6, color: Colors.white),
+                                ),
+                              ],
+                            ),
                           ),
-                          padding: const EdgeInsets.all(16),
+                        ],
+                      ),
+                    ),
+                  );
+                } else {
+                  return GestureDetector(
+                    onLongPress: () {
+                      showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            title: Text(S.of(context).messageOptionsTitle,
+                                style: textTheme.titleLarge),
+                            content: Text(
+                                "What would you like to do to this message?",
+                                style: textTheme.bodyMedium),
+                            actions: <Widget>[
+                              if (filteredMessages[index].messageType ==
+                                  "receiver")
+                                TextButton(
+                                  child: Text(S.of(context).copy,
+                                      style: textTheme.labelLarge),
+                                  onPressed: () {
+                                    copyMessage(index);
+                                    Navigator.of(context).pop();
+                                  },
+                                ),
+                              TextButton(
+                                child: Text(S.of(context).cancel,
+                                    style: textTheme.labelLarge
+                                        ?.copyWith(color: Colors.red)),
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                    child: Container(
+                      alignment: Alignment.bottomCenter,
+                      padding: const EdgeInsets.only(
+                          left: 10, right: 14, top: 10, bottom: 10),
+                      child: Align(
+                        alignment: isSender
+                            ? Alignment.bottomRight
+                            : Alignment.bottomLeft,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                              maxWidth:
+                                  MediaQuery.of(context).size.width * 0.75),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (imageData != null)
-                                Image.memory(
-                                  imageData,
-                                  fit: BoxFit.cover,
-                                )
-                              else
-                                RichText(
-                                  text:
-                                      _buildMessageContent(message, searchTerm),
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  color: Colors.green[800],
                                 ),
-                              Text(
-                                _formatTimestamp(message.timestamp),
-                                style: textTheme.bodySmall?.copyWith(
-                                  fontSize: 6,
-                                  color: Colors.white,
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      senderName,
+                                      style: textTheme.bodySmall?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    RichText(
+                                      text: _buildMessageContent(
+                                          filteredMessages[index], searchTerm),
+                                    ),
+                                    Text(
+                                      _formatTimestamp(
+                                          filteredMessages[index].timestamp),
+                                      style: textTheme.bodySmall?.copyWith(
+                                          fontSize: 6, color: Colors.white),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -424,8 +475,8 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
                         ),
                       ),
                     ),
-                  ),
-                );
+                  );
+                }
               },
             ),
           ),
